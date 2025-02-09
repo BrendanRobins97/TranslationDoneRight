@@ -22,53 +22,103 @@ namespace PSS
 
     public class TextExtractor
     {
-        public static HashSet<string> ExtractAllText(
-            bool fromScenes,
-            bool fromPrefabs,
-            bool fromScripts,
-            bool fromScriptableObjects,
-            bool includeInactive)
+        private static List<ITextExtractor> _extractors;
+        private static Dictionary<Type, bool> _extractorStates;
+
+        static TextExtractor()
+        {
+            InitializeExtractors();
+        }
+
+        private static void InitializeExtractors()
+        {
+            _extractors = new List<ITextExtractor>();
+            _extractorStates = new Dictionary<Type, bool>();
+
+            // Find all types that implement ITextExtractor
+            var extractorTypes = AppDomain.CurrentDomain.GetAssemblies()
+                .SelectMany(assembly => assembly.GetTypes())
+                .Where(type => typeof(ITextExtractor).IsAssignableFrom(type) && !type.IsInterface && !type.IsAbstract);
+
+            foreach (var type in extractorTypes)
+            {
+                try
+                {
+                    var extractor = (ITextExtractor)Activator.CreateInstance(type);
+                    _extractors.Add(extractor);
+                    _extractorStates[type] = EditorPrefs.GetBool($"TextExtractor_{type.Name}_Enabled", extractor.EnabledByDefault);
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError($"Failed to create instance of text extractor {type.Name}: {e.Message}");
+                }
+            }
+
+            // Sort extractors by priority
+            _extractors = _extractors.OrderByDescending(e => e.Priority).ToList();
+        }
+
+        public static IReadOnlyList<ITextExtractor> GetExtractors()
+        {
+            return _extractors.AsReadOnly();
+        }
+
+        public static bool IsExtractorEnabled(Type extractorType)
+        {
+            return _extractorStates.TryGetValue(extractorType, out bool enabled) && enabled;
+        }
+
+        public static void SetExtractorEnabled(Type extractorType, bool enabled)
+        {
+            if (_extractorStates.ContainsKey(extractorType))
+            {
+                _extractorStates[extractorType] = enabled;
+                EditorPrefs.SetBool($"TextExtractor_{extractorType.Name}_Enabled", enabled);
+            }
+        }
+
+        public static HashSet<string> ExtractAllText()
         {
             HashSet<string> extractedText = new HashSet<string>();
 
-            if (fromScenes)
-                ExtractTextFromScenes(extractedText, includeInactive);
-            
-            if (fromPrefabs)
-                ExtractTaggedStringFieldsFromPrefabs(extractedText, includeInactive);
-            
-            if (fromScripts)
-                ExtractTranslateFunctionTexts(extractedText);
-            
-            if (fromScriptableObjects)
-                ExtractScriptableObjectFields(extractedText);
+            // Clear all existing metadata before starting new extraction
+            if (TranslationManager.TranslationData?.Metadata != null)
+            {
+                TranslationManager.TranslationData.Metadata.ClearAllSources();
+            }
+
+            foreach (var extractor in _extractors)
+            {
+                if (IsExtractorEnabled(extractor.GetType()))
+                {
+                    try
+                    {
+                        var newText = extractor.ExtractText(TranslationManager.TranslationData.Metadata);
+                        extractedText.UnionWith(newText);
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.LogError($"Error in {extractor.GetType().Name}: {e.Message}\n{e.StackTrace}");
+                    }
+                }
+            }
 
             return extractedText;
         }
 
         public static void ExtractToCSV(
             string filePath,
-            TranslationData translationData,
-            bool fromScenes,
-            bool fromPrefabs,
-            bool fromScripts,
-            bool fromScriptableObjects,
-            bool includeInactive)
+            TranslationData translationData)
         {
-            var extractedText = ExtractAllText(fromScenes, fromPrefabs, fromScripts, fromScriptableObjects, includeInactive);
+            var extractedText = ExtractAllText();
             WriteNewCSVWithExistingTranslations(filePath, extractedText, translationData);
         }
 
         public static void UpdateExistingCSV(
             string filePath,
-            TranslationData translationData,
-            bool fromScenes,
-            bool fromPrefabs,
-            bool fromScripts,
-            bool fromScriptableObjects,
-            bool includeInactive)
+            TranslationData translationData)
         {
-            var extractedText = ExtractAllText(fromScenes, fromPrefabs, fromScripts, fromScriptableObjects, includeInactive);
+            var extractedText = ExtractAllText();
             List<string[]> existingRows = new List<string[]>();
             Dictionary<string, string[]> existingTranslations = new Dictionary<string, string[]>();
 
@@ -189,14 +239,9 @@ namespace PSS
 
         public static void GenerateReport(
             string filePath,
-            TranslationData translationData,
-            bool fromScenes,
-            bool fromPrefabs,
-            bool fromScripts,
-            bool fromScriptableObjects,
-            bool includeInactive)
+            TranslationData translationData)
         {
-            var extractedText = ExtractAllText(fromScenes, fromPrefabs, fromScripts, fromScriptableObjects, includeInactive);
+            var extractedText = ExtractAllText();
             var unusedKeys = translationData.allKeys.Where(k => !extractedText.Contains(k)).ToList();
             var missingKeys = extractedText.Where(k => !translationData.allKeys.Contains(k)).ToList();
 
@@ -211,6 +256,15 @@ namespace PSS
                 writer.WriteLine($"Total Languages: {translationData.supportedLanguages.Count}");
                 writer.WriteLine($"Unused Keys: {unusedKeys.Count}");
                 writer.WriteLine($"Missing Keys: {missingKeys.Count}\n");
+
+                writer.WriteLine("Active Extractors:");
+                foreach (var extractor in _extractors)
+                {
+                    bool isEnabled = IsExtractorEnabled(extractor.GetType());
+                    writer.WriteLine($"- [{(isEnabled ? "X" : " ")}] {extractor.GetType().Name}");
+                    writer.WriteLine($"    Priority: {extractor.Priority}");
+                    writer.WriteLine($"    Description: {extractor.Description}\n");
+                }
 
                 writer.WriteLine("Language Coverage:");
                 foreach (var language in translationData.supportedLanguages.Skip(1))
@@ -235,6 +289,18 @@ namespace PSS
                     foreach (var key in unusedKeys)
                     {
                         writer.WriteLine($"- {key}");
+                        var sources = translationData.Metadata.GetSources(key);
+                        if (sources.Count > 0)
+                        {
+                            writer.WriteLine("  Last known locations:");
+                            foreach (var source in sources)
+                            {
+                                writer.WriteLine($"    - {source.sourceType} in {source.sourcePath}");
+                                if (!string.IsNullOrEmpty(source.objectPath))
+                                    writer.WriteLine($"      Object: {source.objectPath}");
+                                writer.WriteLine($"      Component: {source.componentName}, Field: {source.fieldName}");
+                            }
+                        }
                     }
                 }
 
@@ -244,6 +310,18 @@ namespace PSS
                     foreach (var key in missingKeys)
                     {
                         writer.WriteLine($"- {key}");
+                        var sources = translationData.Metadata.GetSources(key);
+                        if (sources.Count > 0)
+                        {
+                            writer.WriteLine("  Found in:");
+                            foreach (var source in sources)
+                            {
+                                writer.WriteLine($"    - {source.sourceType} in {source.sourcePath}");
+                                if (!string.IsNullOrEmpty(source.objectPath))
+                                    writer.WriteLine($"      Object: {source.objectPath}");
+                                writer.WriteLine($"      Component: {source.componentName}, Field: {source.fieldName}");
+                            }
+                        }
                     }
                 }
             }
@@ -302,149 +380,6 @@ namespace PSS
             WriteToCSV(filePath, rows);
         }
 
-        public static void ExtractTextFromScenes(HashSet<string> extractedText, bool includeInactive)
-        {
-            for (int i = 0; i < EditorBuildSettings.scenes.Length; i++)
-            {
-                string scenePath = EditorBuildSettings.scenes[i].path;
-                Scene scene = SceneManager.GetSceneByPath(scenePath);
-
-                if (!scene.isLoaded)
-                {
-                    scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
-                }
-
-                // Extract TextMeshPro texts
-                TextMeshProUGUI[] textMeshProObjects = GameObject.FindObjectsOfType<TextMeshProUGUI>(includeInactive);
-                foreach (TextMeshProUGUI textObject in textMeshProObjects)
-                {
-                    if (!string.IsNullOrWhiteSpace(textObject.text))
-                    {
-                        extractedText.Add(textObject.text);
-                    }
-                }
-
-                // Extract UI Text texts
-                Text[] uiTextObjects = GameObject.FindObjectsOfType<Text>(includeInactive);
-                foreach (Text uiText in uiTextObjects)
-                {
-                    if (!string.IsNullOrWhiteSpace(uiText.text))
-                    {
-                        extractedText.Add(uiText.text);
-                    }
-                }
-
-                // Extract fields marked with TranslatedAttribute
-                foreach (GameObject rootObj in scene.GetRootGameObjects())
-                {
-                    ExtractFromGameObject(rootObj, extractedText, includeInactive);
-                }
-            }
-        }
-
-        private static void ExtractFromGameObject(GameObject obj, HashSet<string> extractedText, bool includeInactive)
-        {
-            if (!includeInactive && !obj.activeInHierarchy) return;
-
-            Component[] components = obj.GetComponents<Component>();
-            foreach (Component component in components)
-            {
-                if (component == null) continue;
-                ExtractFieldsRecursive(component, extractedText);
-            }
-
-            foreach (Transform child in obj.transform)
-            {
-                ExtractFromGameObject(child.gameObject, extractedText, includeInactive);
-            }
-        }
-
-        public static void ExtractTranslateFunctionTexts(HashSet<string> extractedText)
-        {
-            string[] scriptPaths = Directory.GetFiles("Assets", "*.cs", SearchOption.AllDirectories);
-            Regex translateRegex = new Regex(@"Translations\.Translate\(\s*""([^""]+)""\s*\)");
-
-            foreach (string scriptPath in scriptPaths)
-            {
-                string scriptContent = File.ReadAllText(scriptPath);
-                MatchCollection matches = translateRegex.Matches(scriptContent);
-
-                foreach (Match match in matches)
-                {
-                    if (match.Groups.Count > 1)
-                    {
-                        string matchedText = match.Groups[1].Value;
-                        extractedText.Add(matchedText);
-                    }
-                }
-            }
-        }
-
-        public static void ExtractScriptableObjectFields(HashSet<string> extractedText)
-        {
-            string[] guids = AssetDatabase.FindAssets("t:ScriptableObject");
-
-            foreach (string guid in guids)
-            {
-                string path = AssetDatabase.GUIDToAssetPath(guid);
-                ScriptableObject scriptableObject = AssetDatabase.LoadAssetAtPath<ScriptableObject>(path);
-
-                if (scriptableObject != null)
-                {
-                    ExtractFieldsRecursive(scriptableObject, extractedText);
-                }
-            }
-        }
-
-        public static void ExtractTaggedStringFieldsFromPrefabs(HashSet<string> extractedText, bool includeInactive)
-        {
-            string[] prefabGuids = AssetDatabase.FindAssets("t:Prefab");
-
-            foreach (string guid in prefabGuids)
-            {
-                string path = AssetDatabase.GUIDToAssetPath(guid);
-                GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
-
-                if (prefab != null)
-                {
-                    Component[] allComponents = prefab.GetComponentsInChildren<Component>(true);
-                    foreach (Component component in allComponents)
-                    {
-                        if (component == null)
-                        {
-                            Debug.LogWarning("Null component found in prefab: " + path);
-                            continue;
-                        }
-
-                        ExtractFieldsRecursive(component, extractedText);
-                    }
-                }
-            }
-        }
-
-        private static void ExtractFieldsRecursive(object obj, HashSet<string> extractedText)
-        {
-            if (obj == null) return;
-
-            FieldInfo[] fields = obj.GetType().GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-            foreach (FieldInfo field in fields)
-            {
-                if (field.IsDefined(typeof(TranslatedAttribute), false))
-                {
-                    if (field.FieldType == typeof(string))
-                    {
-                        string fieldValue = field.GetValue(obj) as string;
-                        extractedText.Add(fieldValue);
-                    }
-                    else if (!field.FieldType.IsPrimitive && !field.FieldType.IsEnum && field.FieldType.IsClass)
-                    {
-                        object nestedObj = field.GetValue(obj);
-                        ExtractFieldsRecursive(nestedObj, extractedText);
-                    }
-                }
-            }
-        }
-
         public static void WriteToCSV(string filePath, List<string[]> rowData)
         {
             using (StreamWriter outStream = new StreamWriter(filePath))
@@ -469,97 +404,56 @@ namespace PSS
             }
         }
 
-        public static void UpdateTranslationData(
-            TranslationData translationData,
-            HashSet<string> newKeys,
-            KeyUpdateMode updateMode)
+        public static void UpdateTranslationData(TranslationData translationData, HashSet<string> extractedText, KeyUpdateMode updateMode)
         {
+            if (translationData == null)
+            {
+                Debug.LogError("TranslationData asset is null");
+                return;
+            }
+
+            // Clear metadata for keys that will be removed
             if (updateMode == KeyUpdateMode.Replace)
             {
-                // Store existing translations before clearing
-                Dictionary<string, Dictionary<string, string>> existingTranslations = new Dictionary<string, Dictionary<string, string>>();
-                
-                // Load existing translations
-                for (int i = 0; i < translationData.allKeys.Count; i++)
+                foreach (var key in translationData.allKeys)
                 {
-                    string key = translationData.allKeys[i];
-                    existingTranslations[key] = new Dictionary<string, string>();
-
-                    for (int j = 0; j < translationData.languageDataDictionary.Length; j++)
+                    if (!extractedText.Contains(key))
                     {
-                        string language = translationData.supportedLanguages[j + 1];
-                        string assetPath = AssetDatabase.GUIDToAssetPath(translationData.languageDataDictionary[j].AssetGUID);
-                        LanguageData languageData = AssetDatabase.LoadAssetAtPath<LanguageData>(assetPath);
-                        
-                        if (languageData != null && i < languageData.allText.Count)
-                        {
-                            existingTranslations[key][language] = languageData.allText[i];
-                        }
+                        translationData.Metadata.ClearSources(key);
                     }
                 }
-
-                // Clear existing data
                 translationData.allKeys.Clear();
-                foreach (var assetRef in translationData.languageDataDictionary)
-                {
-                    string assetPath = AssetDatabase.GUIDToAssetPath(assetRef.AssetGUID);
-                    LanguageData languageData = AssetDatabase.LoadAssetAtPath<LanguageData>(assetPath);
-                    if (languageData != null)
-                    {
-                        languageData.allText.Clear();
-                    }
-                }
+            }
 
-                // Add new keys
-                foreach (string key in newKeys)
+            // Add new keys
+            foreach (string text in extractedText)
+            {
+                if (!translationData.allKeys.Contains(text))
                 {
-                    translationData.allKeys.Add(key);
+                    translationData.allKeys.Add(text);
                     
-                    // Add translations for each language
-                    foreach (var assetRef in translationData.languageDataDictionary)
+                    // Add empty translations for each language
+                    for (int i = 0; i < translationData.languageDataDictionary.Length; i++)
                     {
+                        var assetRef = translationData.languageDataDictionary[i];
                         string assetPath = AssetDatabase.GUIDToAssetPath(assetRef.AssetGUID);
                         LanguageData languageData = AssetDatabase.LoadAssetAtPath<LanguageData>(assetPath);
+                        
                         if (languageData != null)
                         {
-                            string translation = "";
-                            if (existingTranslations.TryGetValue(key, out var translations))
-                            {
-                                string language = translationData.supportedLanguages[translationData.languageDataDictionary.ToList().IndexOf(assetRef) + 1];
-                                translation = translations.TryGetValue(language, out string existingTranslation) ? existingTranslation : "";
-                            }
-                            languageData.allText.Add(translation);
+                            languageData.allText.Add("");
                             EditorUtility.SetDirty(languageData);
                         }
                     }
                 }
             }
-            else // Merge mode
-            {
-                foreach (string key in newKeys)
-                {
-                    if (!translationData.allKeys.Contains(key))
-                    {
-                        translationData.allKeys.Add(key);
-                        
-                        // Add empty translation for each language
-                        foreach (var assetRef in translationData.languageDataDictionary)
-                        {
-                            string assetPath = AssetDatabase.GUIDToAssetPath(assetRef.AssetGUID);
-                            LanguageData languageData = AssetDatabase.LoadAssetAtPath<LanguageData>(assetPath);
-                            if (languageData != null)
-                            {
-                                languageData.allText.Add("");
-                                EditorUtility.SetDirty(languageData);
-                            }
-                        }
-                    }
-                }
-            }
 
+            // Sort keys alphabetically
+            translationData.allKeys.Sort();
             EditorUtility.SetDirty(translationData);
             AssetDatabase.SaveAssets();
         }
     }
 }
 #endif
+

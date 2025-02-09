@@ -47,6 +47,94 @@ namespace PSS
         public Dictionary<TMP_FontAsset, Dictionary<string, TMP_FontAsset>> fonts = 
             new Dictionary<TMP_FontAsset, Dictionary<string, TMP_FontAsset>>();
 
+        // New fields for parameter metadata
+        [OdinSerialize]
+        public Dictionary<string, List<string>> keyParameters = new Dictionary<string, List<string>>();
+
+        // New field for translation context
+        [OdinSerialize]
+        public Dictionary<string, string> keyContexts = new Dictionary<string, string>();
+
+        // Reference to the metadata asset
+        [SerializeField]
+        private TranslationMetadata metadata;
+
+        public TranslationMetadata Metadata
+        {
+            get
+            {
+                if (metadata == null)
+                {
+                    metadata = Resources.Load<TranslationMetadata>("TranslationMetadata");
+#if UNITY_EDITOR
+                    if (metadata == null)
+                    {
+                        metadata = ScriptableObject.CreateInstance<TranslationMetadata>();
+                        if (!AssetDatabase.IsValidFolder("Assets/Resources"))
+                        {
+                            AssetDatabase.CreateFolder("Assets", "Resources");
+                        }
+                        AssetDatabase.CreateAsset(metadata, "Assets/Resources/TranslationMetadata.asset");
+                        AssetDatabase.SaveAssets();
+                    }
+#endif
+                }
+                return metadata;
+            }
+        }
+
+        public void AddKey(string key, List<string> parameters = null, string context = null)
+        {
+            if (!allKeys.Contains(key))
+            {
+                allKeys.Add(key);
+                if (parameters != null && parameters.Count > 0)
+                {
+                    keyParameters[key] = new List<string>(parameters);
+                }
+                if (!string.IsNullOrEmpty(context))
+                {
+                    keyContexts[key] = context;
+                }
+            }
+        }
+
+        public List<string> GetKeyParameters(string key)
+        {
+            return keyParameters.TryGetValue(key, out var parameters) ? parameters : new List<string>();
+        }
+
+        public bool ValidateParameters(string key, IEnumerable<string> providedParameters)
+        {
+            if (!keyParameters.TryGetValue(key, out var requiredParameters))
+                return true; // No parameters defined for this key
+
+            var required = new HashSet<string>(requiredParameters);
+            var provided = new HashSet<string>(providedParameters);
+
+            return required.SetEquals(provided);
+        }
+
+        public string GetKeyContext(string key)
+        {
+            return keyContexts.TryGetValue(key, out var context) ? context : string.Empty;
+        }
+
+        public void SetKeyContext(string key, string context)
+        {
+            if (allKeys.Contains(key))
+            {
+                if (string.IsNullOrEmpty(context))
+                {
+                    keyContexts.Remove(key);
+                }
+                else
+                {
+                    keyContexts[key] = context;
+                }
+            }
+        }
+
 #if UNITY_EDITOR
         [Button("Setup Language Data Assets")]
         public void SetupLanguageDataAssets()

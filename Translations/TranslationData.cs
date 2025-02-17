@@ -59,6 +59,69 @@ namespace PSS
         [SerializeField]
         private TranslationMetadata metadata;
 
+        // Cache for quick text lookup
+        private Dictionary<string, string> textToGroupKeyCache = new Dictionary<string, string>();
+        private Dictionary<string, string> canonicalTextCache = new Dictionary<string, string>();
+
+        // Store similarity group selections and acceptance status
+        [SerializeField]
+        private Dictionary<string, string> similarityGroupSelections = new Dictionary<string, string>();
+
+        private void RebuildCaches()
+        {
+            textToGroupKeyCache.Clear();
+            canonicalTextCache.Clear();
+
+            foreach (var kvp in similarityGroupSelections)
+            {
+                string groupKey = kvp.Key;
+                string selectedText = kvp.Value;
+                
+                // Split the group key back into individual texts
+                var texts = groupKey.Split('|');
+                
+                // Add each text to the cache
+                foreach (var text in texts)
+                {
+                    textToGroupKeyCache[text] = groupKey;
+                    canonicalTextCache[text] = selectedText;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Gets the canonical (selected) text for a given input text if it's part of a similarity group.
+        /// </summary>
+        /// <param name="text">The input text to check</param>
+        /// <returns>The canonical text if the input is part of a similarity group, or the input text if not</returns>
+        public string GetCanonicalText(string text)
+        {
+            // Rebuild caches if they're empty (first use or after domain reload)
+            if (textToGroupKeyCache.Count == 0 && similarityGroupSelections.Count > 0)
+            {
+                RebuildCaches();
+            }
+
+            // Check if this text is in our cache
+            if (canonicalTextCache.TryGetValue(text, out string canonicalText))
+            {
+                return canonicalText;
+            }
+
+            return text; // Return original text if not in any group
+        }
+
+        /// <summary>
+        /// Checks if a text is part of a similarity group and has a different canonical version.
+        /// </summary>
+        /// <param name="text">The text to check</param>
+        /// <returns>True if the text is part of a group and has a different canonical version</returns>
+        public bool HasDifferentCanonicalVersion(string text)
+        {
+            string canonicalText = GetCanonicalText(text);
+            return canonicalText != text;
+        }
+
         public TranslationMetadata Metadata
         {
             get
@@ -133,6 +196,88 @@ namespace PSS
                     keyContexts[key] = context;
                 }
             }
+        }
+
+        public bool showCategoryManagement = false;
+
+        public (string selectedText, bool isAccepted) GetGroupStatus(IEnumerable<string> groupTexts)
+        {
+            string groupKey = string.Join("|", groupTexts.OrderBy(t => t));
+            string selectedText = similarityGroupSelections.TryGetValue(groupKey, out var text) ? text : null;
+            return (selectedText, selectedText == null);
+        }
+
+        public void SetGroupStatus(IEnumerable<string> groupTexts, string selectedText)
+        {
+            string groupKey = string.Join("|", groupTexts.OrderBy(t => t));
+            
+            if (selectedText != null && groupTexts.Contains(selectedText))
+            {
+                similarityGroupSelections[groupKey] = selectedText;
+            }
+            else
+            {
+                similarityGroupSelections.Remove(groupKey);
+            }
+
+            // Clear caches to force rebuild
+            textToGroupKeyCache.Clear();
+            canonicalTextCache.Clear();
+        }
+
+        public void ClearGroupStatus(IEnumerable<string> groupTexts)
+        {
+            string groupKey = string.Join("|", groupTexts.OrderBy(t => t));
+            similarityGroupSelections.Remove(groupKey);
+
+            // Clear caches to force rebuild
+            textToGroupKeyCache.Clear();
+            canonicalTextCache.Clear();
+        }
+
+        public List<List<string>> GetAllGroupedTexts()
+        {
+            if (Application.isPlaying)
+            {
+                if (textToGroupKeyCache.Count == 0 && similarityGroupSelections.Count > 0)
+                {
+                    RebuildCaches();
+                }
+            } else {
+                RebuildCaches();
+            }
+            
+
+            // Group texts by their group keys
+            var groups = new Dictionary<string, List<string>>();
+            foreach (var kvp in textToGroupKeyCache)
+            {
+                string text = kvp.Key;
+                string groupKey = kvp.Value;
+
+                if (!groups.ContainsKey(groupKey))
+                {
+                    groups[groupKey] = new List<string>();
+                }
+                groups[groupKey].Add(text);
+            }
+
+            return groups.Values.ToList();
+        }
+
+        public void SetGroupMetadata(IEnumerable<string> groupTexts, string reason, float similarityScore, string sourceInfo = null)
+        {
+            Metadata.SetGroupMetadata(groupTexts, reason, similarityScore, sourceInfo);
+        }
+
+        public SimilarityGroupMetadata GetGroupMetadata(IEnumerable<string> groupTexts)
+        {
+            return Metadata.GetGroupMetadata(groupTexts);
+        }
+
+        public void ClearGroupMetadata(IEnumerable<string> groupTexts)
+        {
+            Metadata.ClearGroupMetadata(groupTexts);
         }
 
 #if UNITY_EDITOR

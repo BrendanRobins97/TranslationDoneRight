@@ -2,7 +2,6 @@
 using UnityEngine;
 using UnityEditor;
 using System.Collections.Generic;
-using System.Reflection;
 
 namespace PSS
 {
@@ -25,46 +24,16 @@ namespace PSS
 
                 if (scriptableObject != null)
                 {
-                    ExtractFieldsRecursive(scriptableObject, extractedText, metadata, path);
+                    TranslationExtractionHelper.ExtractTranslationsFromObject(
+                        scriptableObject,
+                        extractedText,
+                        metadata,
+                        path,
+                        sourceType: TextSourceType.ScriptableObject);
                 }
             }
 
             return extractedText;
-        }
-
-        private void ExtractFieldsRecursive(object obj, HashSet<string> extractedText, TranslationMetadata metadata, string sourcePath)
-        {
-            if (obj == null) return;
-
-            FieldInfo[] fields = obj.GetType().GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-            foreach (FieldInfo field in fields)
-            {
-                if (field.IsDefined(typeof(TranslatedAttribute), false))
-                {
-                    if (field.FieldType == typeof(string))
-                    {
-                        string fieldValue = field.GetValue(obj) as string;
-                        if (!string.IsNullOrEmpty(fieldValue))
-                        {
-                            extractedText.Add(fieldValue);
-                            
-                            var sourceInfo = new TextSourceInfo
-                            {
-                                sourceType = TextSourceType.ScriptableObject,
-                                sourcePath = sourcePath,
-                                componentName = obj.GetType().Name,
-                                fieldName = field.Name
-                            };
-                            metadata.AddSource(fieldValue, sourceInfo);
-                        }
-                    }
-                    else if (!field.FieldType.IsPrimitive && !field.FieldType.IsEnum && field.FieldType.IsClass)
-                    {
-                        object nestedObj = field.GetValue(obj);
-                        ExtractFieldsRecursive(nestedObj, extractedText, metadata, sourcePath);
-                    }
-                }
-            }
         }
     }
 }

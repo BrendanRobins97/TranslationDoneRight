@@ -103,36 +103,40 @@ namespace PSS
 
         public static string Translate(string originalText, params (string name, object value)[] parameters)
         {
-            if (currentLanguage == "English")
-                return FormatWithParameters(originalText, parameters);
+            // First check if this text has a canonical version
+            string textToTranslate = TranslationData.GetCanonicalText(originalText);
 
-            if (translations.TryGetValue(originalText, out var translatedText))
+            if (currentLanguage == "English")
+                return FormatWithParameters(textToTranslate, parameters);
+
+            if (translations.TryGetValue(textToTranslate, out var translatedText))
             {
                 // Validate parameters against the required parameters in TranslationData
                 if (parameters != null && parameters.Length > 0)
                 {
-                    var requiredParams = TranslationData.GetKeyParameters(originalText);
+                    var requiredParams = TranslationData.GetKeyParameters(textToTranslate);
                     var providedParams = parameters.Select(p => p.name).ToList();
                     
                     // Check for missing required parameters
                     var missingParams = requiredParams.Except(providedParams);
                     if (missingParams.Any())
                     {
-                        Debug.LogWarning($"Missing required parameters for key '{originalText}': {string.Join(", ", missingParams)}");
+                        Debug.LogWarning($"Missing required parameters for key '{textToTranslate}': {string.Join(", ", missingParams)}");
                     }
                     
                     // Check for extra parameters that aren't defined
                     var extraParams = providedParams.Except(requiredParams);
                     if (extraParams.Any())
                     {
-                        Debug.LogWarning($"Extra parameters provided for key '{originalText}': {string.Join(", ", extraParams)}");
+                        Debug.LogWarning($"Extra parameters provided for key '{textToTranslate}': {string.Join(", ", extraParams)}");
                     }
                 }
 
                 return FormatWithParameters(translatedText, parameters);
             }
 
-            return FormatWithParameters(originalText, parameters);
+            // If no translation found, use the canonical text
+            return FormatWithParameters(textToTranslate, parameters);
         }
 
         private static string FormatWithParameters(string format, (string name, object value)[] parameters)

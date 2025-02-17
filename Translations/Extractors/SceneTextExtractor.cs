@@ -6,7 +6,6 @@ using System.Collections.Generic;
 using TMPro;
 using UnityEditor.SceneManagement;
 using UnityEngine.UI;
-using System.Reflection;
 
 namespace PSS
 {
@@ -20,7 +19,6 @@ namespace PSS
         public HashSet<string> ExtractText(TranslationMetadata metadata)
         {
             var extractedText = new HashSet<string>();
-
 
             for (int i = 0; i < EditorBuildSettings.scenes.Length; i++)
             {
@@ -80,7 +78,6 @@ namespace PSS
             Text[] uiTextObjects = GameObject.FindObjectsOfType<Text>(true);
             foreach (Text uiText in uiTextObjects)
             {
-
                 if (uiText.GetComponent<DynamicTMP>())
                 {
                     continue;
@@ -109,49 +106,19 @@ namespace PSS
             foreach (Component component in components)
             {
                 if (component == null) continue;
-                ExtractFieldsRecursive(component, extractedText, metadata, scenePath, GetGameObjectPath(obj), !obj.activeInHierarchy);
+                TranslationExtractionHelper.ExtractTranslationsFromObject(
+                    component, 
+                    extractedText, 
+                    metadata, 
+                    scenePath, 
+                    GetGameObjectPath(obj), 
+                    !obj.activeInHierarchy,
+                    TextSourceType.Scene);
             }
 
             foreach (Transform child in obj.transform)
             {
                 ExtractFromGameObject(child.gameObject, extractedText, metadata, scenePath);
-            }
-        }
-
-        private void ExtractFieldsRecursive(object obj, HashSet<string> extractedText, TranslationMetadata metadata, string sourcePath, string objectPath, bool wasInactive)
-        {
-            if (obj == null) return;
-
-            FieldInfo[] fields = obj.GetType().GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-            foreach (FieldInfo field in fields)
-            {
-                if (field.IsDefined(typeof(TranslatedAttribute), false))
-                {
-                    if (field.FieldType == typeof(string))
-                    {
-                        string fieldValue = field.GetValue(obj) as string;
-                        if (!string.IsNullOrEmpty(fieldValue))
-                        {
-                            extractedText.Add(fieldValue);
-                            
-                            var sourceInfo = new TextSourceInfo
-                            {
-                                sourceType = TextSourceType.Scene,
-                                sourcePath = sourcePath,
-                                objectPath = objectPath,
-                                componentName = obj.GetType().Name,
-                                fieldName = field.Name,
-                                wasInactive = wasInactive
-                            };
-                            metadata.AddSource(fieldValue, sourceInfo);
-                        }
-                    }
-                    else if (!field.FieldType.IsPrimitive && !field.FieldType.IsEnum && field.FieldType.IsClass)
-                    {
-                        object nestedObj = field.GetValue(obj);
-                        ExtractFieldsRecursive(nestedObj, extractedText, metadata, sourcePath, objectPath, wasInactive);
-                    }
-                }
             }
         }
 

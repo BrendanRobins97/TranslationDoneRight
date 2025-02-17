@@ -2,6 +2,7 @@
 using UnityEngine;
 using UnityEditor;
 using System.Collections.Generic;
+using System;
 
 namespace PSS
 {
@@ -9,63 +10,69 @@ namespace PSS
     {
         private bool isEditing;
         private string editingValue;
-        private readonly TranslationMetadata metadata;
-        private readonly TextSourceInfo sourceInfo;
-        private static Dictionary<int, bool> isEditingStates = new Dictionary<int, bool>();
-        private static Dictionary<int, string> editingValues = new Dictionary<int, string>();
 
-        public TextCategoryDropdown(TranslationMetadata metadata, TextSourceInfo sourceInfo)
-        {
-            this.metadata = metadata;
-            this.sourceInfo = sourceInfo;
-            
-            int sourceId = sourceInfo.GetHashCode();
-            if (sourceInfo.textCategory == null || sourceInfo.textCategory == ""){
-                sourceInfo.textCategory = "UI";
-            }
-            if (!isEditingStates.ContainsKey(sourceId))
-            {
-                isEditingStates[sourceId] = false;
-                editingValues[sourceId] = sourceInfo.textCategory.ToString();
+        private static Dictionary<int, Dictionary<int, bool>> isEditingStatesDictionary = new Dictionary<int, Dictionary<int, bool>>();
+        private static Dictionary<int, Dictionary<int, string>> editingValuesDictionary = new Dictionary<int, Dictionary<int, string>>();
+        
+        private Dictionary<int, string> editingValues {
+            get {
+                if (!editingValuesDictionary.ContainsKey(guid)) {
+                    editingValuesDictionary[guid] = new Dictionary<int, string>();
+                }
+                return editingValuesDictionary[guid];
             }
         }
 
-        public void Draw()
-        {
-            int sourceId = sourceInfo.GetHashCode();
+        private Dictionary<int, bool> isEditingStates {
+            get {
+                if (!isEditingStatesDictionary.ContainsKey(guid)) {
+                    isEditingStatesDictionary[guid] = new Dictionary<int, bool>();
+                }
+                return isEditingStatesDictionary[guid];
+            }
+        }
 
+        private int guid;
+
+        private Action<string> onEditted;
+        public string Draw(string label, int sourceId, string textCategory, List<string> categories, UnityEngine.Object target, Action<string> onEditted)
+        {
+            this.guid = sourceId + label.GetHashCode();
+            this.onEditted = onEditted;
             if (!isEditingStates.ContainsKey(sourceId))
             {
                 isEditingStates[sourceId] = false;
-                editingValues[sourceId] = sourceInfo.textCategory.ToString();
+                editingValues[sourceId] = textCategory;
             }
 
             isEditing = isEditingStates[sourceId];
             editingValue = editingValues[sourceId];
 
             EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("Category:", GUILayout.Width(150));
+            EditorGUILayout.LabelField($"{label}:", GUILayout.Width(150));
 
             if (isEditing)
             {
-                DrawEditMode(sourceId);
+                textCategory = DrawEditMode(sourceId, textCategory, target, categories);
             }
             else
             {
-                DrawDropdownMode(sourceId);
+                textCategory = DrawDropdownMode(sourceId, textCategory, target, categories);
             }
 
             EditorGUILayout.EndHorizontal();
+            return textCategory;
         }
 
-        private void DrawEditMode(int sourceId)
+        private string DrawEditMode(int sourceId, string textCategory, UnityEngine.Object target, List<string> categories)
         {
             float buttonWidth = 50;
             float spacing = 5;
 
-            // Text field for editing
+            // Text field for editing with a specific control name
+            GUI.SetNextControlName("CategoryEditField");
             editingValue = EditorGUILayout.TextField(editingValue, 
-                GUILayout.Width(EditorGUIUtility.currentViewWidth - 300));
+                GUILayout.Width(300));
 
             // Update the stored editing value
             editingValues[sourceId] = editingValue;
@@ -73,66 +80,89 @@ namespace PSS
             // Add/Save button
             if (GUILayout.Button("Save", GUILayout.Width(buttonWidth)))
             {
-                if (!string.IsNullOrEmpty(editingValue))
+                if (string.IsNullOrEmpty(editingValue))
                 {
-                    string oldCategory = sourceInfo.textCategory.ToString();
-                    
-                    // Add to categories if it doesn't exist
-                    metadata.AddTextCategory(editingValue);
-                    
-                    sourceInfo.textCategory = editingValue;
-                    editingValues[sourceId] = editingValue.ToString();
+                    textCategory = "";
+                }
+                else
+                {
+                    textCategory = editingValue;
+                    editingValues[sourceId] = editingValue;
 
-                    // Update any other sources using the old category
-                    metadata.UpdateTextCategory(oldCategory, editingValue);
-                    
-                    EditorUtility.SetDirty(metadata);
+                    if (!categories.Contains(editingValue))
+                    {
+                        categories.Add(editingValue);
+                        EditorUtility.SetDirty(target);
+                    }
+
+                    if (isEditingStates[sourceId])
+                    {
+                        onEditted?.Invoke(editingValue);
+                    }
                 }
                 
                 isEditingStates[sourceId] = false;
+                GUI.FocusControl(null);
+                EditorGUI.FocusTextInControl(null);
             }
 
             // Cancel button
             if (GUILayout.Button("Cancel", GUILayout.Width(buttonWidth)))
             {
                 isEditingStates[sourceId] = false;
-                editingValues[sourceId] = sourceInfo.textCategory.ToString();
+                editingValues[sourceId] = textCategory;
+                GUI.FocusControl(null); // Clear focus explicitly
+                EditorGUI.FocusTextInControl(null); // Also clear text focus
+                EditorUtility.SetDirty(target);
             }
+            return textCategory;
         }
 
-        private void DrawDropdownMode(int sourceId)
+        private string DrawDropdownMode(int sourceId, string textCategory, UnityEngine.Object target, List<string> categories)
         {
-            var categories = new List<string>(metadata.TextCategories);
-            int currentIndex = categories.IndexOf(sourceInfo.textCategory.ToString());
+            var currentCategories = new List<string>(categories);
             
-            // Add "New Category" option at the beginning
-            categories.Insert(0, "(New Category)");
+            // Handle empty/null textCategory
+            bool isNoneSelected = string.IsNullOrEmpty(textCategory);
+            int currentIndex = isNoneSelected ? -1 : currentCategories.IndexOf(textCategory);
             
-            // Draw the dropdown
+            // Add "None" and "New Category" options at the beginning
+            currentCategories.Insert(0, "(New Category)");
+            currentCategories.Insert(0, "(None)");
+            
+            // Draw the dropdown (+2 because we added two items at the start)
             int selectedIndex = EditorGUILayout.Popup(
-                currentIndex + 1, // +1 because we added "New Category" at the start
-                categories.ToArray(),
-                GUILayout.Width(EditorGUIUtility.currentViewWidth - 300)
+                isNoneSelected ? 0 : currentIndex + 2,
+                currentCategories.ToArray(),
+                GUILayout.Width(300)
             );
 
             // Handle selection
-            if (selectedIndex == 0) // New Category selected
+            if (selectedIndex == 0) // None selected
+            {
+                textCategory = "";
+                EditorUtility.SetDirty(target);
+            }
+            else if (selectedIndex == 1) // New Category selected
             {
                 isEditingStates[sourceId] = true;
-                editingValues[sourceId] = sourceInfo.textCategory.ToString();
+                editingValues[sourceId] = textCategory;
+                EditorUtility.SetDirty(target);
             }
-            else if (selectedIndex > 0) // Existing category selected
+            else if (selectedIndex > 1) // Existing category selected
             {
-                string selectedCategory = categories[selectedIndex];
-                sourceInfo.textCategory = selectedCategory;
+                string selectedCategory = currentCategories[selectedIndex];
+                textCategory = selectedCategory;
+                EditorUtility.SetDirty(target);
             }
 
-            // Edit button
-            if (GUILayout.Button("Edit", GUILayout.Width(40)))
+            // Edit button (only show if a category is selected)
+            if (!string.IsNullOrEmpty(textCategory) && GUILayout.Button("Edit", GUILayout.Width(40)))
             {
                 isEditingStates[sourceId] = true;
-                editingValues[sourceId] = sourceInfo.textCategory.ToString();
+                editingValues[sourceId] = textCategory;
             }
+            return textCategory;
         }
     }
 }

@@ -12,37 +12,48 @@ namespace PSS
         public TextSourceType SourceType => TextSourceType.Script;
         public int Priority => 80;
         public bool EnabledByDefault => true;
-        public string Description => "Extracts text from all C# scripts in the project, finding Translate() function calls.";
+        public string Description => "Extracts text from all C# scripts in the project, finding Translate() and TranslateString() function calls.";
 
         public HashSet<string> ExtractText(TranslationMetadata metadata)
         {
             var extractedText = new HashSet<string>();
             string[] scriptPaths = Directory.GetFiles("Assets", "*.cs", SearchOption.AllDirectories);
-            Regex translateRegex = new Regex(@"Translations\.Translate\(\s*""([^""]+)""\s*\)");
+
+            // Match both Translations.Translate("text") and "text".TranslateString()
+            var patterns = new[]
+            {
+                new { Pattern = @"Translations\.Translate\(\s*""([^""]+)""\s*\)", Method = "Translate()" },
+                new { Pattern = @"""([^""]+)""\s*\.TranslateString\(\s*\)", Method = "TranslateString()" }
+            };
 
             foreach (string scriptPath in scriptPaths)
             {
                 string scriptContent = File.ReadAllText(scriptPath);
-                MatchCollection matches = translateRegex.Matches(scriptContent);
-
-                foreach (Match match in matches)
+                
+                foreach (var pattern in patterns)
                 {
-                    if (match.Groups.Count > 1)
+                    var regex = new Regex(pattern.Pattern);
+                    MatchCollection matches = regex.Matches(scriptContent);
+
+                    foreach (Match match in matches)
                     {
-                        string matchedText = match.Groups[1].Value;
-                        extractedText.Add(matchedText);
-                        
-                        // Get line number for better context
-                        int lineNumber = GetLineNumber(scriptContent, match.Index);
-                        
-                        var sourceInfo = new TextSourceInfo
+                        if (match.Groups.Count > 1)
                         {
-                            sourceType = TextSourceType.Script,
-                            sourcePath = scriptPath,
-                            componentName = Path.GetFileNameWithoutExtension(scriptPath),
-                            fieldName = $"Translate() call at line {lineNumber}"
-                        };
-                        metadata.AddSource(matchedText, sourceInfo);
+                            string matchedText = match.Groups[1].Value;
+                            extractedText.Add(matchedText);
+                            
+                            // Get line number for better context
+                            int lineNumber = GetLineNumber(scriptContent, match.Index);
+                            
+                            var sourceInfo = new TextSourceInfo
+                            {
+                                sourceType = TextSourceType.Script,
+                                sourcePath = scriptPath,
+                                componentName = Path.GetFileNameWithoutExtension(scriptPath),
+                                fieldName = $"{pattern.Method} call at line {lineNumber}"
+                            };
+                            metadata.AddSource(matchedText, sourceInfo);
+                        }
                     }
                 }
             }

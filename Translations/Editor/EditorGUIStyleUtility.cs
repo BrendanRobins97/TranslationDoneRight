@@ -7,6 +7,9 @@ namespace PSS
     {
         private static GUIStyle expandingTextAreaStyle;
         private static GUIStyle warningLabelStyle;
+        private static GUIStyle headerLabelStyle;
+        private static GUIStyle foldoutHeaderStyle;
+        private static GUIStyle cardStyle;
 
         public static GUIStyle ExpandingTextAreaStyle
         {
@@ -38,6 +41,58 @@ namespace PSS
                     };
                 }
                 return warningLabelStyle;
+            }
+        }
+
+        public static GUIStyle HeaderLabel
+        {
+            get
+            {
+                if (headerLabelStyle == null)
+                {
+                    headerLabelStyle = new GUIStyle(EditorStyles.boldLabel)
+                    {
+                        fontSize = 16,
+                        margin = new RectOffset(4, 4, 4, 4),
+                        padding = new RectOffset(4, 4, 4, 4),
+                        alignment = TextAnchor.MiddleLeft
+                    };
+                }
+                return headerLabelStyle;
+            }
+        }
+
+        public static GUIStyle FoldoutHeader
+        {
+            get
+            {
+                if (foldoutHeaderStyle == null)
+                {
+                    foldoutHeaderStyle = new GUIStyle(EditorStyles.foldout)
+                    {
+                        fontSize = 12,
+                        fontStyle = FontStyle.Bold,
+                        margin = new RectOffset(4, 4, 4, 4),
+                        padding = new RectOffset(18, 2, 2, 2)
+                    };
+                }
+                return foldoutHeaderStyle;
+            }
+        }
+
+        public static GUIStyle CardStyle
+        {
+            get
+            {
+                if (cardStyle == null)
+                {
+                    cardStyle = new GUIStyle(EditorStyles.helpBox)
+                    {
+                        margin = new RectOffset(4, 4, 2, 2),
+                        padding = new RectOffset(8, 8, 8, 8)
+                    };
+                }
+                return cardStyle;
             }
         }
 

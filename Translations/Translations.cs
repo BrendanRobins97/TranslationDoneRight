@@ -11,5 +11,10 @@ namespace PSS
         {
             return TranslationManager.Translate(key, parameters);
         }
+
+        public static string TranslateString(this string text)
+        {
+            return TranslationManager.Translate(text);
+        }
     }
 }

@@ -23,75 +23,16 @@ namespace PSS
         public string componentName;     // Name of the component containing the text
         public string fieldName;         // Name of the field containing the text
         public bool wasInactive;         // Whether the GameObject was inactive when extracted
+    }
 
-        // Enhanced context fields
-        [TextArea(3, 10)]
-        public string manualContext;     // Additional manual context from the user
-
-        // Specialized context fields
-        public string textCategory;    // Category of text (UI, Dialog, Tutorial, Item, etc.)
-        public string speakerInfo;           // For dialog: Information about who is speaking
-        public string locationContext;       // Where this text appears in the game
-        public string mechanicContext;       // Related game mechanics
-        public string targetAudience;        // Intended audience/tone
-        public string culturalNotes;         // Cultural or lore-specific notes
-        public string visualContext;         // Description of visual elements
-        
-        /// <summary>
-        /// Generates optimized context for DeepL translation following best practices:
-        /// 1. Most important context first (category, location, audience)
-        /// 2. Clear and concise descriptions
-        /// 3. Specific details that affect meaning or tone
-        /// 4. Technical details last (if relevant)
-        /// </summary>
-        public string Context
-        {
-            get
-            {
-                var contextParts = new List<string>();
-
-                // Start with text category and basic context
-                contextParts.Add($"Type: {textCategory} text");
-                if (!string.IsNullOrEmpty(locationContext))
-                    contextParts.Add($"Location: {locationContext}");
-                if (!string.IsNullOrEmpty(targetAudience))
-                    contextParts.Add($"Audience: {targetAudience}");
-
-                if (!string.IsNullOrEmpty(speakerInfo))
-                    contextParts.Add($"Speaker: {speakerInfo}");
-
-                if (!string.IsNullOrEmpty(visualContext))
-                        contextParts.Add($"Visual: {visualContext}");
-                    if (!string.IsNullOrEmpty(mechanicContext))
-                        contextParts.Add($"Action: {mechanicContext}");
-
-                if (!string.IsNullOrEmpty(culturalNotes))
-                    contextParts.Add($"Lore: {culturalNotes}");
-
-                if (!string.IsNullOrEmpty(mechanicContext))
-                    contextParts.Add($"Action: {mechanicContext}");
-
-                if (!string.IsNullOrEmpty(manualContext))
-                    contextParts.Add($"Additional info: {manualContext}");
-
-                // Add manual context if provided
-                if (!string.IsNullOrEmpty(manualContext))
-                    contextParts.Add($"Additional info: {manualContext}");
-
-                // Add technical context last
-                var technicalContext = new List<string>();
-                if (!string.IsNullOrEmpty(componentName))
-                    technicalContext.Add($"Component: {componentName}");
-                if (!string.IsNullOrEmpty(fieldName))
-                    technicalContext.Add($"Field: {fieldName}");
-
-                if (technicalContext.Count > 0)
-                    contextParts.Add($"Technical details: {string.Join(", ", technicalContext)}");
-
-                // Join all parts with periods for clear separation
-                return string.Join(". ", contextParts.Where(p => !string.IsNullOrEmpty(p)));
-            }
-        }
+    [Serializable]
+    public class SimilarityGroupMetadata
+    {
+        public string reason;
+        public float similarityScore;
+        public string sourceInfo;
+        public DateTime createdTime;
+        public DateTime lastModifiedTime;
     }
 
     public class TranslationMetadata : SerializedScriptableObject
@@ -99,55 +40,40 @@ namespace PSS
         [SerializeField]
         private Dictionary<string, List<TextSourceInfo>> textSources = new Dictionary<string, List<TextSourceInfo>>();
 
+        // Store metadata for similarity groups
+        [SerializeField]
+        private Dictionary<string, SimilarityGroupMetadata> similarityGroupMetadata = new Dictionary<string, SimilarityGroupMetadata>();
+
         // Add list of text categories
         [SerializeField]
-        private List<string> textCategories = new List<string>
-        {
-            "UI",
-            "Dialog",
-            "Tutorial",
-            "Item",
-            "System",
-            "Lore",
-            "Achievement",
-            "Menu",
-            "Error",
-            "Notification"
-        };
-
-        public IReadOnlyList<string> TextCategories => textCategories;
-
-        public void AddTextCategory(string category)
-        {
-            if (!textCategories.Contains(category))
+        private Dictionary<string, List<string>> textCategories = new Dictionary<string, List<string>>() {
             {
-                textCategories.Add(category);
-            }
-        }
-
-        public void RemoveTextCategory(string category)
-        {
-            textCategories.Remove(category);
-        }
-
-        public void UpdateTextCategory(string oldCategory, string newCategory)
-        {
-            int index = textCategories.IndexOf(oldCategory);
-            if (index >= 0)
-            {
-                textCategories[index] = newCategory;
-
-                // Update all existing sources using this category
-                foreach (var sources in textSources.Values)
+                "UI",
+                new List<string>
                 {
-                    foreach (var source in sources)
-                    {
-                        if (source.textCategory == oldCategory)
-                        {
-                            source.textCategory = newCategory;
-                        }
-                    }
+                    "Button",
+                }
+            }
+        };
+        public Dictionary<string, List<string>> TextCategories => textCategories;
 
+        // New centralized context storage
+        [SerializeField]
+        private Dictionary<string, Dictionary<string, string>> textContexts = new Dictionary<string, Dictionary<string, string>>();
+
+        public void UpdateTextCategory(string key, string oldCategory, string newCategory)
+        {
+            if (textCategories.ContainsKey(key))
+            {
+                textCategories[key].Add(newCategory);
+                // Update all existing contexts using this category
+                foreach (var textKey in textContexts.Keys)
+                {
+                    var context = textContexts[textKey];
+                    if (context.ContainsKey(key) && context[key] == oldCategory)
+                    {
+                        context[key] = newCategory;
+                    }
                 }
             }
         }
@@ -159,21 +85,59 @@ namespace PSS
                 textSources[text] = new List<TextSourceInfo>();
             }
             textSources[text].Add(sourceInfo);
+
+            // Initialize context if it doesn't exist
+            if (!textContexts.ContainsKey(text))
+            {
+                textContexts[text] = new Dictionary<string, string>();
+                foreach (var category in textCategories.Keys)
+                {
+                    textContexts[text][category] = "";
+                }
+            }
         }
 
         // Get combined context for translation
         public string GetTranslationContext(string text)
         {
-            if (!textSources.TryGetValue(text, out var sources) || sources.Count == 0)
+            if (!textContexts.TryGetValue(text, out var context))
                 return string.Empty;
 
-            // Combine contexts from all sources, removing duplicates
-            var contexts = new HashSet<string>(
-                sources.Select(s => s.Context)
-                       .Where(c => !string.IsNullOrEmpty(c))
-            );
+            var contextParts = new List<string>();
+            foreach (var key in context.Keys)
+            {
+                if (!string.IsNullOrEmpty(context[key]))
+                    contextParts.Add($"{key}: {context[key]}");
+            }
 
-            return string.Join("\n\n", contexts);
+            return string.Join(". ", contextParts);
+        }
+
+        public Dictionary<string, string> GetContext(string text)
+        {
+            if (!textContexts.ContainsKey(text))
+            {
+                textContexts[text] = new Dictionary<string, string>();
+                foreach (var category in textCategories.Keys)
+                {
+                    textContexts[text][category] = "";
+                }
+            }
+            return textContexts[text];
+        }
+
+        public void SetContext(string text, Dictionary<string, string> context)
+        {
+            textContexts[text] = context;
+        }
+
+        public void UpdateContext(string text, string key, string value)
+        {
+            if (!textContexts.ContainsKey(text))
+            {
+                textContexts[text] = new Dictionary<string, string>();
+            }
+            textContexts[text][key] = value;
         }
 
         public void ClearSources(string text)
@@ -202,6 +166,37 @@ namespace PSS
         public Dictionary<string, List<TextSourceInfo>> GetAllSources()
         {
             return textSources;
+        }
+
+        public void SetGroupMetadata(IEnumerable<string> groupTexts, string reason, float similarityScore, string sourceInfo = null)
+        {
+            string groupKey = string.Join("|", groupTexts.OrderBy(t => t));
+            
+            if (!similarityGroupMetadata.TryGetValue(groupKey, out var metadata))
+            {
+                metadata = new SimilarityGroupMetadata
+                {
+                    createdTime = DateTime.Now
+                };
+                similarityGroupMetadata[groupKey] = metadata;
+            }
+
+            metadata.reason = reason;
+            metadata.similarityScore = similarityScore;
+            metadata.sourceInfo = sourceInfo;
+            metadata.lastModifiedTime = DateTime.Now;
+        }
+
+        public SimilarityGroupMetadata GetGroupMetadata(IEnumerable<string> groupTexts)
+        {
+            string groupKey = string.Join("|", groupTexts.OrderBy(t => t));
+            return similarityGroupMetadata.TryGetValue(groupKey, out var metadata) ? metadata : null;
+        }
+
+        public void ClearGroupMetadata(IEnumerable<string> groupTexts)
+        {
+            string groupKey = string.Join("|", groupTexts.OrderBy(t => t));
+            similarityGroupMetadata.Remove(groupKey);
         }
     }
 } 

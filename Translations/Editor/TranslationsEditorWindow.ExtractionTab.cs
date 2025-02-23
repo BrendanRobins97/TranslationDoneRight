@@ -11,15 +11,6 @@ namespace PSS
         private bool showExtractionTools = true;
         private bool showCSVTools = true;
 
-        private float GetHalfCardWidth()
-        {
-            // Account for scrollbar width, padding, and spacing
-            float scrollbarWidth = 20f;
-            float horizontalSpacing = 10f;
-            float availableWidth = position.width - scrollbarWidth - (horizontalSpacing * 3); // Account for left, middle, and right spacing
-            return availableWidth / 2;
-        }
-
         private void DrawTextExtractionTab()
         {
             float cardWidth = GetHalfCardWidth();
@@ -29,7 +20,8 @@ namespace PSS
             EditorGUILayout.Space(10);
             GUILayout.Label("Text Extraction", EditorGUIStyleUtility.HeaderLabel);
             EditorGUILayout.Space(5);
-            EditorGUILayout.HelpBox("Configure and manage text extraction from your game assets.", MessageType.None);
+            
+            EditorGUILayout.LabelField("This tool scans your Unity project for text that needs translation, including UI elements, scripts, and ScriptableObjects. It automatically identifies and extracts text while maintaining a database of translations across all supported languages.", EditorStyles.wordWrappedLabel);
             EditorGUILayout.Space(10);
 
             // Update Mode Selection

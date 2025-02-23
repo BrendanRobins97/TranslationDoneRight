@@ -16,33 +16,11 @@ namespace PSS
     /// </summary>
     public class TranslationService : MonoBehaviour
     {
-        private static TranslationService instance;
-        public static TranslationService Instance
-        {
-            get
-            {
-                if (instance == null)
-                {
-                    var go = new GameObject("TranslationService");
-                    instance = go.AddComponent<TranslationService>();
-                    DontDestroyOnLoad(go);
-                }
-                return instance;
-            }
-        }
-
         private Dictionary<TextMeshProUGUI, string> originalTexts = new Dictionary<TextMeshProUGUI, string>();
         private Dictionary<TextMeshProUGUI, TMP_FontAsset> originalFonts = new Dictionary<TextMeshProUGUI, TMP_FontAsset>();
 
         private void Awake()
         {
-            if (instance != null && instance != this)
-            {
-                Destroy(gameObject);
-                return;
-            }
-
-            instance = this;
             DontDestroyOnLoad(gameObject);
             TranslationManager.OnLanguageChanged += Refresh;
 

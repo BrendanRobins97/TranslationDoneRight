@@ -22,7 +22,7 @@ namespace PSS
         private bool showCategoryManagement = false;
         private string newCategoryName = "";
         
-        private Tab currentTab = Tab.Languages;
+        private Tab currentTab = Tab.AllText;
 
         private Vector2 gridScrollPosition;
         private float gridViewScale = 1f;
@@ -55,6 +55,12 @@ namespace PSS
             LoadEditorPrefs();
             needsCoverageUpdate = true;
 
+            // Initialize search settings
+            searchSettingsInstance = CreateInstance<SearchSettings>();
+            searchSettingsInstance.hideFlags = HideFlags.DontSave;
+            searchSettings = new SerializedObject(searchSettingsInstance);
+            searchFilterProp = searchSettings.FindProperty("searchFilter");
+
             // Subscribe to TextExtractor events
             TextExtractor.OnExtractionStarted += HandleExtractionStarted;
             TextExtractor.OnExtractionComplete += HandleExtractionComplete;
@@ -66,6 +72,10 @@ namespace PSS
         private void OnDisable()
         {
             SaveEditorPrefs();
+
+            // Clean up
+            if (searchSettingsInstance != null)
+                DestroyImmediate(searchSettingsInstance);
 
             // Unsubscribe from TextExtractor events
             TextExtractor.OnExtractionStarted -= HandleExtractionStarted;
@@ -143,12 +153,10 @@ namespace PSS
 
             // Draw tabs with icons using reliable built-in Unity icons
             EditorGUILayout.BeginHorizontal(EditorStyles.toolbar);
-            if (GUILayout.Toggle(currentTab == Tab.Settings, new GUIContent(" Settings", EditorGUIUtility.IconContent("d_Settings").image), EditorStyles.toolbarButton))
-                currentTab = Tab.Settings;
-            if (GUILayout.Toggle(currentTab == Tab.TextExtraction, new GUIContent(" Text Extraction", EditorGUIUtility.IconContent("d_Prefab Icon").image), EditorStyles.toolbarButton))
-                currentTab = Tab.TextExtraction;
             if (GUILayout.Toggle(currentTab == Tab.AllText, new GUIContent(" All Text", EditorGUIUtility.IconContent("d_TextAsset Icon").image), EditorStyles.toolbarButton))
                 currentTab = Tab.AllText;
+            if (GUILayout.Toggle(currentTab == Tab.TextExtraction, new GUIContent(" Text Extraction", EditorGUIUtility.IconContent("d_Prefab Icon").image), EditorStyles.toolbarButton))
+                currentTab = Tab.TextExtraction;
             if (GUILayout.Toggle(currentTab == Tab.Languages, new GUIContent(" Languages", EditorGUIUtility.IconContent("d_BuildSettings.Standalone").image), EditorStyles.toolbarButton))
                 currentTab = Tab.Languages;
             if (GUILayout.Toggle(currentTab == Tab.DeepL, new GUIContent(" DeepL", EditorGUIUtility.IconContent("d_BuildSettings.Web.Small").image), EditorStyles.toolbarButton))
@@ -160,23 +168,20 @@ namespace PSS
             scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition);
             
             switch (currentTab)
-            {
-                case Tab.Languages:
-                    DrawLanguagesTab();
-                    break;
-                case Tab.AllText:
-                    DrawAllTextTab();
-                    break;
-                case Tab.TextExtraction:
-                    DrawTextExtractionTab();
-                    break;
-                case Tab.Settings:
-                    DrawSettingsTab();
-                    break;
-                case Tab.DeepL:
-                    DrawDeepLTab();
-                    break;
-            }
+                {
+                    case Tab.Languages:
+                        DrawLanguagesTab();
+                        break;
+                    case Tab.AllText:
+                        DrawAllTextTab();
+                        break;
+                    case Tab.TextExtraction:
+                        DrawTextExtractionTab();
+                        break;
+                    case Tab.DeepL:
+                        DrawDeepLTab();
+                        break;
+                }
 
             EditorGUILayout.EndScrollView();
 
@@ -213,6 +218,15 @@ namespace PSS
         {
             translationData = ScriptableObject.CreateInstance<TranslationData>();
             
+            // Create folder structure
+            if (!AssetDatabase.IsValidFolder("Assets/Translations"))
+            {
+                AssetDatabase.CreateFolder("Assets", "Translations");
+            }
+            if (!AssetDatabase.IsValidFolder("Assets/Translations/Languages"))
+            {
+                AssetDatabase.CreateFolder("Assets/Translations", "Languages");
+            }
             if (!AssetDatabase.IsValidFolder("Assets/Resources"))
             {
                 AssetDatabase.CreateFolder("Assets", "Resources");

@@ -121,7 +121,7 @@ namespace PSS
             for (int i = 0; i < translationData.allKeys.Count; i++)
             {
                 string[] row = new string[translationData.supportedLanguages.Count];
-                row[0] = translationData.allKeys[i]; // English key
+                row[0] = translationData.allKeys[i]; // default language key
 
                 // Add translations for other languages
                 for (int j = 0; j < translationData.languageDataDictionary.Length; j++)
@@ -243,7 +243,7 @@ namespace PSS
             {
                 string key = translationData.allKeys[keyIndex];
                 string[] translationRow = new string[translationData.supportedLanguages.Count];
-                translationRow[0] = key; // English (key)
+                translationRow[0] = key; // default language (key)
 
                 // Get translations for each language
                 for (int langIndex = 0; langIndex < translationData.languageDataDictionary.Length; langIndex++)
@@ -253,7 +253,7 @@ namespace PSS
                     
                     if (languageData != null && keyIndex < languageData.allText.Count)
                     {
-                        // langIndex + 1 because first column is English
+                        // langIndex + 1 because first column is default language
                         translationRow[langIndex + 1] = languageData.allText[keyIndex];
                     }
                 }
@@ -271,7 +271,7 @@ namespace PSS
                 }
                 else
                 {
-                    // Create new row with just the English text
+                    // Create new row with just the default language text
                     string[] newRow = new string[translationData.supportedLanguages.Count];
                     newRow[0] = text;
                     rows.Add(newRow);

@@ -19,26 +19,12 @@ namespace PSS
     [CreateAssetMenu(fileName = "TranslationData", menuName = "Localization/TranslationData")]
     public class TranslationData : SerializedScriptableObject
     {
+        // Default language setting
+        [SerializeField]
+        public string defaultLanguage = "English";
+
         // Add list of supported languages
-        public List<string> supportedLanguages = new List<string>
-        {
-            "English",
-            "French", 
-            "Italian", 
-            "German", 
-            "Danish", 
-            "Dutch", 
-            "Japanese",
-            "Korean", 
-            "Portuguese", 
-            "Portuguese (Brazil)", 
-            "Russian", 
-            "Chinese (Simplified)",
-            "Spanish", 
-            "Swedish", 
-            "Chinese (Traditional)", 
-            "Ukrainian"
-        };
+        public List<string> supportedLanguages = new List<string>();
 
         public AssetReference[] languageDataDictionary = new AssetReference[0];
         public List<string> allKeys = new List<string>();
@@ -47,9 +33,6 @@ namespace PSS
         public Dictionary<TMP_FontAsset, Dictionary<string, TMP_FontAsset>> fonts = 
             new Dictionary<TMP_FontAsset, Dictionary<string, TMP_FontAsset>>();
 
-        // New fields for parameter metadata
-        [OdinSerialize]
-        public Dictionary<string, List<string>> keyParameters = new Dictionary<string, List<string>>();
 
         // New field for translation context
         [OdinSerialize]
@@ -60,8 +43,10 @@ namespace PSS
         private TranslationMetadata metadata;
 
         // Cache for quick text lookup
-        private Dictionary<string, string> textToGroupKeyCache = new Dictionary<string, string>();
-        private Dictionary<string, string> canonicalTextCache = new Dictionary<string, string>();
+        [SerializeField]
+        private SerializableDictionary<string, string> textToGroupKeyCache = new SerializableDictionary<string, string>();
+        [SerializeField]
+        private SerializableDictionary<string, string> canonicalTextCache = new SerializableDictionary<string, string>();
 
         // Store similarity group selections and acceptance status
         [SerializeField]
@@ -146,36 +131,16 @@ namespace PSS
             }
         }
 
-        public void AddKey(string key, List<string> parameters = null, string context = null)
+        public void AddKey(string key, string context = null)
         {
             if (!allKeys.Contains(key))
             {
                 allKeys.Add(key);
-                if (parameters != null && parameters.Count > 0)
-                {
-                    keyParameters[key] = new List<string>(parameters);
-                }
                 if (!string.IsNullOrEmpty(context))
                 {
                     keyContexts[key] = context;
                 }
             }
-        }
-
-        public List<string> GetKeyParameters(string key)
-        {
-            return keyParameters.TryGetValue(key, out var parameters) ? parameters : new List<string>();
-        }
-
-        public bool ValidateParameters(string key, IEnumerable<string> providedParameters)
-        {
-            if (!keyParameters.TryGetValue(key, out var requiredParameters))
-                return true; // No parameters defined for this key
-
-            var required = new HashSet<string>(requiredParameters);
-            var provided = new HashSet<string>(providedParameters);
-
-            return required.SetEquals(provided);
         }
 
         public string GetKeyContext(string key)
@@ -294,15 +259,15 @@ namespace PSS
                 languageGroup = settings.CreateGroup("LanguageData", false, false, true, null);
             }
 
-            // Resize array to match number of non-English languages
-            int nonEnglishCount = supportedLanguages.Count - 1; // Exclude English
-            if (languageDataDictionary.Length != nonEnglishCount)
+            // Resize array to match number of non-default languages
+            int nonDefaultCount = supportedLanguages.Count - 1; // Exclude default language
+            if (languageDataDictionary.Length != nonDefaultCount)
             {
-                Array.Resize(ref languageDataDictionary, nonEnglishCount);
+                Array.Resize(ref languageDataDictionary, nonDefaultCount);
             }
 
-            // Create language data assets for each supported language (except English)
-            for (int i = 1; i < supportedLanguages.Count; i++) // Start from 1 to skip English
+            // Create language data assets for each supported language (except default language)
+            for (int i = 1; i < supportedLanguages.Count; i++) // Start from 1 to skip default language
             {
                 string language = supportedLanguages[i];
                 string sanitizedName = SanitizeFileName(language);
@@ -380,11 +345,11 @@ namespace PSS
 
             string[] headers = rows[0];
             
-            // Find the English column index
-            int englishIndex = Array.IndexOf(headers, "English");
-            if (englishIndex == -1)
+            // Find the default language column index
+            int defaultLanguageIndex = Array.IndexOf(headers, defaultLanguage);
+            if (defaultLanguageIndex == -1)
             {
-                Debug.LogError("CSV must contain an 'English' column.");
+                Debug.LogError("CSV must contain a '" + defaultLanguage + "' column.");
                 return;
             }
 
@@ -395,7 +360,7 @@ namespace PSS
             // Initialize language data assets
             for (int i = 0; i < languageDataDictionary.Length; i++)
             {
-                string language = supportedLanguages[i + 1]; // +1 to skip English
+                string language = supportedLanguages[i + 1]; // +1 to skip default language
                 string assetPath = AssetDatabase.GUIDToAssetPath(languageDataDictionary[i].AssetGUID);
                 LanguageData asset = AssetDatabase.LoadAssetAtPath<LanguageData>(assetPath);
                 
@@ -414,7 +379,7 @@ namespace PSS
             // Find column indices for each supported language
             for (int i = 0; i < headers.Length; i++)
             {
-                if (supportedLanguages.Contains(headers[i]) && headers[i] != "English")
+                if (supportedLanguages.Contains(headers[i]) && headers[i] != defaultLanguage)
                 {
                     languageColumns[headers[i]] = i;
                 }
@@ -428,23 +393,23 @@ namespace PSS
             {
                 string[] fields = rows[rowIndex];
                 
-                if (fields.Length <= englishIndex)
+                if (fields.Length <= defaultLanguageIndex)
                 {
                     Debug.LogWarning($"Skipping row {rowIndex + 1}: insufficient columns");
                     continue;
                 }
 
-                string englishText = fields[englishIndex];
-                if (string.IsNullOrWhiteSpace(englishText))
+                string defaultLanguageText = fields[defaultLanguageIndex];
+                if (string.IsNullOrWhiteSpace(defaultLanguageText))
                 {
                     continue;
                 }
 
-                // Add the English key
-                allKeys.Add(englishText);
+                // Add the default language key
+                allKeys.Add(defaultLanguageText);
 
                 // Add translations for each language
-                foreach (var language in supportedLanguages.Skip(1)) // Skip English
+                foreach (var language in supportedLanguages.Skip(1)) // Skip default language
                 {
                     if (languageColumns.TryGetValue(language, out int columnIndex) && 
                         languageDataAssets.TryGetValue(language, out LanguageData asset))

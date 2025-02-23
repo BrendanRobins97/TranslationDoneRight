@@ -16,7 +16,7 @@ namespace PSS
     {
         private static TranslationData translationData;
         private static Dictionary<string, string> translations = new Dictionary<string, string>();
-        private static string currentLanguage = "English";
+        private static string currentLanguage = TranslationData.defaultLanguage;
         private static AssetReference currentLanguageAssetRef;
 
         public static event Action OnLanguageChanged;
@@ -85,7 +85,7 @@ namespace PSS
 
         private static void LoadLanguage()
         {
-            currentLanguage = PlayerPrefs.GetString("Language", "English");
+            currentLanguage = PlayerPrefs.GetString("Language", TranslationData.defaultLanguage);
         }
 
         private static void SetLanguage()
@@ -96,82 +96,23 @@ namespace PSS
             });
         }
 
-        public static string Translate(string originalText)
-        {
-            return Translate(originalText, null);
-        }
 
-        public static string Translate(string originalText, params (string name, object value)[] parameters)
+        public static string Translate(string originalText)
         {
             // First check if this text has a canonical version
             string textToTranslate = TranslationData.GetCanonicalText(originalText);
 
-            if (currentLanguage == "English")
-                return FormatWithParameters(textToTranslate, parameters);
+            if (currentLanguage == TranslationData.defaultLanguage)
+                return textToTranslate;
 
             if (translations.TryGetValue(textToTranslate, out var translatedText))
             {
-                // Validate parameters against the required parameters in TranslationData
-                if (parameters != null && parameters.Length > 0)
-                {
-                    var requiredParams = TranslationData.GetKeyParameters(textToTranslate);
-                    var providedParams = parameters.Select(p => p.name).ToList();
-                    
-                    // Check for missing required parameters
-                    var missingParams = requiredParams.Except(providedParams);
-                    if (missingParams.Any())
-                    {
-                        Debug.LogWarning($"Missing required parameters for key '{textToTranslate}': {string.Join(", ", missingParams)}");
-                    }
-                    
-                    // Check for extra parameters that aren't defined
-                    var extraParams = providedParams.Except(requiredParams);
-                    if (extraParams.Any())
-                    {
-                        Debug.LogWarning($"Extra parameters provided for key '{textToTranslate}': {string.Join(", ", extraParams)}");
-                    }
-                }
-
-                return FormatWithParameters(translatedText, parameters);
+                return translatedText;
             }
 
             // If no translation found, use the canonical text
-            return FormatWithParameters(textToTranslate, parameters);
+            return textToTranslate;
         }
-
-        private static string FormatWithParameters(string format, (string name, object value)[] parameters)
-        {
-            if (string.IsNullOrEmpty(format))
-                return format;
-
-            try
-            {
-                string result = format;
-                
-                // First, handle translation key references
-                if (format.Contains("{@"))
-                {
-                    result = ProcessTranslationKeyReferences(result, new HashSet<string>());
-                }
-
-                // Then handle regular parameters if any exist
-                if (parameters != null && parameters.Length > 0)
-                {
-                    foreach (var (name, value) in parameters)
-                    {
-                        result = result.Replace($"{{{name}}}", value?.ToString() ?? string.Empty);
-                    }
-                }
-                
-                return result;
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"Translation format error: {ex.Message}");
-                return format;
-            }
-        }
-
         private static string ProcessTranslationKeyReferences(string text, HashSet<string> processedKeys, int depth = 0)
         {
             if (depth > 10)
@@ -236,7 +177,7 @@ namespace PSS
 
         private static void LoadLanguage(string language, Action onComplete)
         {
-            if (language == "English")
+            if (language == TranslationData.defaultLanguage)
             {
                 onComplete?.Invoke();
                 return;

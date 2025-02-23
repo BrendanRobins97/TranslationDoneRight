@@ -6,7 +6,6 @@ namespace PSS
     {
         private enum Tab
         {
-            Settings,
             TextExtraction,
             AllText,
             Languages,
@@ -30,6 +29,22 @@ namespace PSS
         {
             public string text;
             public string detected_source_language;
+        }
+
+        [System.Serializable]
+        private class BatchTranslationRequest
+        {
+            public string[] text;
+            public string target_lang;
+            public string context;
+            public string formality;
+            public bool preserve_formatting;
+        }
+
+        [System.Serializable]
+        private class BatchTranslationResponse
+        {
+            public DeepLTranslation[] translations;
         }
     }
 } 

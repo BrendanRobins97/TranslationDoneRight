@@ -401,7 +401,10 @@ namespace PSS
         {
             if (string.IsNullOrEmpty(deeplApiKey) || translationData == null) return;
 
-            var context = translationData.GetKeyContext(key);
+            // Only get context if the includeContextInTranslation flag is true
+            string context = includeContextInTranslation ? translationData.Metadata.GetTranslationContext(key) : "";
+            Debug.Log($"Context for key '{key}': {context}");
+
             int keyIndex = translationData.allKeys.IndexOf(key);
             
             if (keyIndex == -1) return;

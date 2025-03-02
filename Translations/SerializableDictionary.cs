@@ -1,19 +1,29 @@
-using UnityEngine;
 using System;
+using System.Collections;
 using System.Collections.Generic;
+using UnityEngine;
+using Sirenix.OdinInspector;
+using Sirenix.Serialization;
 
 namespace PSS
 {
     [Serializable]
+    [Translated]
     public class SerializableDictionary<TKey, TValue> : Dictionary<TKey, TValue>, ISerializationCallbackReceiver
     {
-        [SerializeField]
+        [SerializeField, HideInInspector]
         private List<TKey> keys = new List<TKey>();
         
-        [SerializeField]
+        [SerializeField, HideInInspector]
         private List<TValue> values = new List<TValue>();
         
-        // Save the dictionary to lists
+        // Empty constructor
+        public SerializableDictionary() : base() { }
+        
+        // Constructor to initialize with existing dictionary
+        public SerializableDictionary(Dictionary<TKey, TValue> dictionary) : base(dictionary) { }
+        
+        // Save the dictionary to lists before serialization
         public void OnBeforeSerialize()
         {
             keys.Clear();
@@ -25,21 +35,46 @@ namespace PSS
             }
         }
         
-        // Load dictionary from lists
+        // Load the dictionary from lists after deserialization
         public void OnAfterDeserialize()
         {
             this.Clear();
 
             if (keys.Count != values.Count)
             {
-                Debug.LogError($"SerializableDictionary deserialization error: key count ({keys.Count}) != value count ({values.Count})");
+                Debug.LogError($"Deserialization error: key count ({keys.Count}) != value count ({values.Count})");
                 return;
             }
 
             for(int i = 0; i < keys.Count; i++)
             {
-                this.Add(keys[i], values[i]);
+                this[keys[i]] = values[i];
             }
+        }
+
+        // Add a new key-value pair or update an existing one
+        public void AddOrUpdate(TKey key, TValue value)
+        {
+            if (this.ContainsKey(key))
+                this[key] = value;
+            else
+                this.Add(key, value);
+        }
+
+        // Try to get a value by key, returning default if not found
+        public TValue GetValueOrDefault(TKey key, TValue defaultValue = default)
+        {
+            if (this.TryGetValue(key, out TValue value))
+                return value;
+            return defaultValue;
+        }
+
+        // Remove a key if it exists, returning true if removed
+        public bool RemoveIfExists(TKey key)
+        {
+            if (this.ContainsKey(key))
+                return this.Remove(key);
+            return false;
         }
     }
 } 

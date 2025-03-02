@@ -167,6 +167,21 @@ namespace PSS
                         AddTranslationIfValid(str, obj ?? field.DeclaringType, field.Name, extractedText, metadata, sourcePath, objectPath, wasInactive, sourceType);
                     }
                 }
+                // Add dictionary handling
+                else if (field.FieldType.IsGenericType && 
+                    (field.FieldType.GetGenericTypeDefinition() == typeof(Dictionary<,>) ||
+                     typeof(IDictionary<,>).MakeGenericType(field.FieldType.GetGenericArguments()).IsAssignableFrom(field.FieldType)))
+                {
+                    var valueType = field.FieldType.GetGenericArguments()[1];
+                    if (valueType == typeof(string))
+                    {
+                        var dictionary = fieldValue as IDictionary;
+                        foreach (DictionaryEntry entry in dictionary)
+                        {
+                            AddTranslationIfValid(entry.Value as string, obj ?? field.DeclaringType, field.Name, extractedText, metadata, sourcePath, objectPath, wasInactive, sourceType);
+                        }
+                    }
+                }
                 else if (typeof(IEnumerable).IsAssignableFrom(field.FieldType) && field.FieldType != typeof(string))
                 {
                     foreach (object item in (IEnumerable)fieldValue)
@@ -214,6 +229,21 @@ namespace PSS
                     foreach (string str in (IEnumerable<string>)propertyValue)
                     {
                         AddTranslationIfValid(str, obj, property.Name, extractedText, metadata, sourcePath, objectPath, wasInactive, sourceType);
+                    }
+                }
+                // Add dictionary handling for properties
+                else if (property.PropertyType.IsGenericType && 
+                    (property.PropertyType.GetGenericTypeDefinition() == typeof(Dictionary<,>) ||
+                     typeof(IDictionary<,>).MakeGenericType(property.PropertyType.GetGenericArguments()).IsAssignableFrom(property.PropertyType)))
+                {
+                    var valueType = property.PropertyType.GetGenericArguments()[1];
+                    if (valueType == typeof(string))
+                    {
+                        var dictionary = propertyValue as IDictionary;
+                        foreach (DictionaryEntry entry in dictionary)
+                        {
+                            AddTranslationIfValid(entry.Value as string, obj, property.Name, extractedText, metadata, sourcePath, objectPath, wasInactive, sourceType);
+                        }
                     }
                 }
                 else if (typeof(IEnumerable).IsAssignableFrom(property.PropertyType) && property.PropertyType != typeof(string))

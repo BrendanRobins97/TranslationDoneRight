@@ -1,35 +1,34 @@
-using TMPro;
 using UnityEngine;
-using System.Text.RegularExpressions;
+using UnityEngine.UI;
 using System;
 
 namespace PSS
 {
-    public static class TranslatedTMPExtensions
+    public static class TranslatedTextExtensions
     {
-        public static void SetTextTranslated(this TMP_Text tmpText, string key)
+        public static void SetTextTranslated(this Text text, string key)
         {
-            if (tmpText.GetComponent<TranslatedTMP>() == null)
+            if (text.GetComponent<TranslatedText>() == null)
             {
-                tmpText.gameObject.AddComponent<TranslatedTMP>();
+                text.gameObject.AddComponent<TranslatedText>();
             }
-            tmpText.GetComponent<TranslatedTMP>().SetText(key);
+            text.GetComponent<TranslatedText>().SetText(key);
         }
 
-        public static void SetTextTranslated(this TMP_Text tmpText, string format, params object[] args)
+        public static void SetTextTranslated(this Text text, string format, params object[] args)
         {
-            if (tmpText.GetComponent<TranslatedTMP>() == null)
+            if (text.GetComponent<TranslatedText>() == null)
             {
-                tmpText.gameObject.AddComponent<TranslatedTMP>();   
+                text.gameObject.AddComponent<TranslatedText>();   
             }
-            tmpText.GetComponent<TranslatedTMP>().SetText(format, args);
+            text.GetComponent<TranslatedText>().SetText(format, args);
         }
     }
 
-    [RequireComponent(typeof(TextMeshProUGUI))]
-    public class TranslatedTMP : MonoBehaviour
+    [RequireComponent(typeof(Text))]
+    public class TranslatedText : MonoBehaviour
     {
-        private TextMeshProUGUI tmpText;
+        private Text text;
         private string currentText;
         private string formatPattern;
         private object[] formatArgs;
@@ -37,7 +36,7 @@ namespace PSS
 
         private void Awake()
         {
-            tmpText = GetComponent<TextMeshProUGUI>();
+            text = GetComponent<Text>();
             Initialize();
         }
 
@@ -56,7 +55,7 @@ namespace PSS
             if (isInitialized) return;
             
             // Store the initial text
-            currentText = tmpText.text;
+            currentText = text.text;
             formatPattern = "{0}";
             formatArgs = new object[0];
             
@@ -71,7 +70,7 @@ namespace PSS
             if (formatArgs.Length == 0)
             {
                 // Simple single word translation
-                tmpText.text = TranslationManager.Translate(currentText);
+                text.text = TranslationManager.Translate(currentText);
                 return;
             }
 
@@ -92,7 +91,7 @@ namespace PSS
                 }
             }
             
-            tmpText.text = string.Format(translatedFormat, translatedArgs);
+            text.text = string.Format(translatedFormat, translatedArgs);
         }
 
         // Simple key only - just shows translated text

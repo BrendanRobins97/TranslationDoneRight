@@ -1,6 +1,8 @@
 using UnityEngine;
 using UnityEditor;
 using System.Collections.Generic;
+using System.Linq;
+using UnityEditorInternal;
 
 namespace PSS
 {
@@ -10,6 +12,111 @@ namespace PSS
         private bool showExtractionSources = true;
         private bool showExtractionTools = true;
         private bool showCSVTools = true;
+        private ReorderableList extractionSourcesList;
+        private Vector2 sourceListScrollPosition;
+
+        private void InitializeExtractionSourcesList()
+        {
+            if (extractionSourcesList != null) return;
+            
+            extractionSourcesList = new ReorderableList(
+                translationData.Metadata.extractionSources ?? new List<ExtractionSource>(),
+                typeof(ExtractionSource),
+                true, true, true, true);
+
+            extractionSourcesList.drawHeaderCallback = (Rect rect) =>
+            {
+                EditorGUI.LabelField(rect, "Extraction Sources (Empty = Full Project)");
+            };
+
+            extractionSourcesList.onAddCallback = (ReorderableList list) =>
+            {
+                if (translationData.Metadata.extractionSources == null)
+                {
+                    translationData.Metadata.extractionSources = new List<ExtractionSource>();
+                }
+                translationData.Metadata.extractionSources.Add(new ExtractionSource());
+                EditorUtility.SetDirty(translationData);
+            };
+
+            extractionSourcesList.onRemoveCallback = (ReorderableList list) =>
+            {
+                if (EditorUtility.DisplayDialog("Remove Source", 
+                    "Are you sure you want to remove this extraction source?", "Yes", "No"))
+                {
+                    translationData.Metadata.extractionSources.RemoveAt(list.index);
+                    EditorUtility.SetDirty(translationData);
+                }
+            };
+
+            extractionSourcesList.drawElementCallback = (Rect rect, int index, bool isActive, bool isFocused) =>
+            {
+                if (translationData.Metadata.extractionSources == null || index >= translationData.Metadata.extractionSources.Count)
+                    return;
+
+                var source = translationData.Metadata.extractionSources[index];
+                rect.y += 2;
+                rect.height = EditorGUIUtility.singleLineHeight;
+
+                // Calculate rects for the different elements
+                var typeRect = new Rect(rect.x, rect.y, 100, rect.height);
+                var pathRect = new Rect(rect.x + 105, rect.y, rect.width - 305, rect.height);
+                var recursiveRect = new Rect(rect.x + rect.width - 195, rect.y, 60, rect.height);
+                var browseRect = new Rect(rect.x + rect.width - 130, rect.y, 60, rect.height);
+                var pingRect = new Rect(rect.x + rect.width - 65, rect.y, 60, rect.height);
+
+                // Draw the type enum
+                source.type = (ExtractionSourceType)EditorGUI.EnumPopup(typeRect, source.type);
+
+                // Draw the path field
+                if (source.type == ExtractionSourceType.Folder)
+                {
+                    source.folderPath = EditorGUI.TextField(pathRect, source.folderPath);
+                    source.recursive = EditorGUI.Toggle(recursiveRect, new GUIContent("Recursive", "Include subfolders"), source.recursive);
+                }
+                else
+                {
+                    source.asset = EditorGUI.ObjectField(pathRect, source.asset, typeof(UnityEngine.Object), false) as UnityEngine.Object;
+                }
+
+                // Browse button
+                if (GUI.Button(browseRect, "Browse"))
+                {
+                    string title = source.type == ExtractionSourceType.Folder ? "Select Folder" : "Select Asset";
+                    string path = EditorUtility.OpenFolderPanel(title, "Assets", "");
+                    if (!string.IsNullOrEmpty(path))
+                    {
+                        if (path.StartsWith(Application.dataPath))
+                        {
+                            source.folderPath = "Assets" + path.Substring(Application.dataPath.Length);
+                            EditorUtility.SetDirty(translationData);
+                        }
+                        else
+                        {
+                            EditorUtility.DisplayDialog("Invalid Path", 
+                                "Please select a folder within your Unity project's Assets folder.", "OK");
+                        }
+                    }
+                }
+
+                // Ping button
+                if (GUI.Button(pingRect, "Ping"))
+                {
+                    if (source.type == ExtractionSourceType.Folder)
+                    {
+                        var folder = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(source.folderPath);
+                        if (folder != null)
+                            EditorGUIUtility.PingObject(folder);
+                    }
+                    else if (source.asset != null)
+                    {
+                        EditorGUIUtility.PingObject(source.asset);
+                    }
+                }
+
+                EditorUtility.SetDirty(translationData);
+            };
+        }
 
         private void DrawTextExtractionTab()
         {
@@ -53,6 +160,69 @@ namespace PSS
             {
                 EditorGUI.indentLevel++;
 
+                // Draw the extraction sources list
+                using (new EditorGUILayout.VerticalScope(EditorGUIStyleUtility.CardStyle))
+                {
+                    InitializeExtractionSourcesList();
+                    
+                    // Help box explaining the feature
+                    EditorGUILayout.HelpBox(
+                        "Specify folders or assets to include in text extraction. If no sources are specified, the entire project will be scanned.", 
+                        MessageType.Info);
+                    
+                    sourceListScrollPosition = EditorGUILayout.BeginScrollView(sourceListScrollPosition, GUILayout.Height(Mathf.Min(200, extractionSourcesList.GetHeight())));
+                    extractionSourcesList.DoLayoutList();
+                    EditorGUILayout.EndScrollView();
+
+                    // Drag and drop area
+                    Rect dropArea = GUILayoutUtility.GetRect(0.0f, 50.0f, GUILayout.ExpandWidth(true));
+                    GUI.Box(dropArea, "Drag and drop folders or assets here", EditorStyles.helpBox);
+                    
+                    Event evt = Event.current;
+                    switch (evt.type)
+                    {
+                        case EventType.DragUpdated:
+                        case EventType.DragPerform:
+                            if (!dropArea.Contains(evt.mousePosition))
+                                break;
+                                
+                            DragAndDrop.visualMode = DragAndDropVisualMode.Copy;
+
+                            if (evt.type == EventType.DragPerform)
+                            {
+                                DragAndDrop.AcceptDrag();
+                                
+                                foreach (var path in DragAndDrop.paths)
+                                {
+                                    if (translationData.Metadata.extractionSources == null)
+                                        translationData.Metadata.extractionSources = new List<ExtractionSource>();
+
+                                    var source = new ExtractionSource
+                                    {
+                                        type = System.IO.Directory.Exists(path) ? 
+                                            ExtractionSourceType.Folder : ExtractionSourceType.Asset,
+                                        folderPath = path,
+                                        recursive = true
+                                    };
+
+                                    if (source.type == ExtractionSourceType.Asset)
+                                    {
+                                        source.asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path);
+                                    }
+
+                                    translationData.Metadata.extractionSources.Add(source);
+                                }
+                                
+                                EditorUtility.SetDirty(translationData);
+                                evt.Use();
+                            }
+                            break;
+                    }
+                }
+
+                EditorGUILayout.Space(10);
+
+                // Draw the extractors list
                 var extractors = TextExtractor.GetExtractors();
                 foreach (var extractor in extractors)
                 {

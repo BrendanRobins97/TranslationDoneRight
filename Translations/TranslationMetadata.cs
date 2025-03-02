@@ -1,7 +1,6 @@
 using UnityEngine;
 using System;
 using System.Collections.Generic;
-using Sirenix.OdinInspector;
 using System.Linq;
 
 namespace PSS
@@ -116,7 +115,7 @@ namespace PSS
         [SerializeField]
         private SerializableDictionary<string, string> customLanguageMappings = new SerializableDictionary<string, string>();
         public SerializableDictionary<string, string> CustomLanguageMappings => customLanguageMappings;
-
+        public List<ExtractionSource> extractionSources = new List<ExtractionSource>();
         public void UpdateTextCategory(string key, string oldCategory, string newCategory)
         {
             if (textCategories.ContainsKey(key))

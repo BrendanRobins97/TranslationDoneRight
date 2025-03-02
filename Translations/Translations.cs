@@ -11,5 +11,27 @@ namespace PSS
         {
             return TranslationManager.Translate(text);
         }
+
+        public static string Format(string format, params object[] args)
+        {
+            // Translate the format string
+            string translatedFormat = TranslationManager.Translate(format);
+            
+            // Translate any string arguments
+            object[] translatedArgs = new object[args.Length];
+            for (int i = 0; i < args.Length; i++)
+            {
+                if (args[i] is string stringArg)
+                {
+                    translatedArgs[i] = TranslationManager.Translate(stringArg);
+                }
+                else
+                {
+                    translatedArgs[i] = args[i];
+                }
+            }
+            
+            return string.Format(translatedFormat, translatedArgs);
+        }
     }
 }

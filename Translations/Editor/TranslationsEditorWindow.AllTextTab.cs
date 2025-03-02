@@ -355,7 +355,7 @@ namespace PSS
                     EditorGUILayout.BeginHorizontal();
                     
                     // Left side - Empty space or DeepL buttons
-                    using (new EditorGUILayout.HorizontalScope(GUILayout.Width(position.width / 2 - 25)))
+                    using (new EditorGUILayout.HorizontalScope(GUILayout.Width(position.width / 2 - 35)))
                     {
                         if (selectedKeys.Count > 0)
                         {
@@ -396,12 +396,12 @@ namespace PSS
                         }
                         else
                         {
-                            GUILayout.Label("Select items to translate", EditorStyles.centeredGreyMiniLabel, GUILayout.Width(500), GUILayout.Height(25.5f));
+                            GUILayout.Label("Select items to translate", EditorStyles.centeredGreyMiniLabel, GUILayout.Width(400), GUILayout.Height(25.5f));
                         }
                     }
 
                     // Right side - Show Detailed View button
-                    using (new EditorGUILayout.HorizontalScope(GUILayout.Width(position.width / 2 - 20)))
+                    using (new EditorGUILayout.HorizontalScope(GUILayout.Width(position.width / 2 - 35)))
                     {
                         GUILayout.FlexibleSpace();
                         if (selectedKeys.Count > 0)

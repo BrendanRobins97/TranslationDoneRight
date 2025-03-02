@@ -4,6 +4,7 @@ using UnityEditor;
 using System.Collections.Generic;
 using System.Linq;
 using System;
+using System.IO;
 
 namespace PSS
 {
@@ -138,6 +139,46 @@ namespace PSS
 
             OnExtractionComplete?.Invoke(extractedText);
             return extractedText;
+        }
+
+        public static bool ShouldProcessPath(string assetPath, TranslationMetadata metadata)
+        {
+            if (metadata.extractionSources == null || metadata.extractionSources.Count == 0)
+                return true;
+
+            assetPath = assetPath.Replace('\\', '/').TrimStart('/');
+            if (!assetPath.StartsWith("Assets/"))
+                assetPath = "Assets/" + assetPath;
+
+            foreach (var source in metadata.extractionSources)
+            {
+                if (source.type == ExtractionSourceType.Folder)
+                {
+                    string folderPath = source.folderPath?.Replace('\\', '/').TrimStart('/') ?? "";
+                    if (!folderPath.StartsWith("Assets/"))
+                        folderPath = "Assets/" + folderPath;
+
+                    if (source.recursive)
+                    {
+                        if (assetPath.StartsWith(folderPath))
+                            return true;
+                    }
+                    else
+                    {
+                        string directory = Path.GetDirectoryName(assetPath)?.Replace('\\', '/');
+                        if (directory == folderPath)
+                            return true;
+                    }
+                }
+                else if (source.type == ExtractionSourceType.Asset && source.asset != null)
+                {
+                    string sourcePath = AssetDatabase.GetAssetPath(source.asset)?.Replace('\\', '/');
+                    if (assetPath == sourcePath)
+                        return true;
+                }
+            }
+
+            return false;
         }
 
         /// <summary>

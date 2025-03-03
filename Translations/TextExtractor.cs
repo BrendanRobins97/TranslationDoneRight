@@ -143,14 +143,46 @@ namespace PSS
 
         public static bool ShouldProcessPath(string assetPath, TranslationMetadata metadata)
         {
-            if (metadata.extractionSources == null || metadata.extractionSources.Count == 0)
-                return true;
+            return ShouldProcessPath(assetPath, metadata, null);
+        }
 
+        /// <summary>
+        /// Determines if the given asset path should be processed based on extraction sources.
+        /// </summary>
+        /// <param name="assetPath">The path to check</param>
+        /// <param name="metadata">The translation metadata containing sources</param>
+        /// <param name="extractorType">Optional extractor type to check specific sources</param>
+        /// <returns>True if the path should be processed, false otherwise</returns>
+        public static bool ShouldProcessPath(string assetPath, TranslationMetadata metadata, Type extractorType)
+        {
+            // Normalize the asset path
             assetPath = assetPath.Replace('\\', '/').TrimStart('/');
             if (!assetPath.StartsWith("Assets/"))
                 assetPath = "Assets/" + assetPath;
 
-            foreach (var source in metadata.extractionSources)
+            // Check extractor-specific sources first
+            if (extractorType != null && 
+                metadata.extractorSources != null && 
+                metadata.extractorSources.TryGetValue(extractorType.Name, out var extractorSources) && 
+                extractorSources.Items.Count > 0)
+            {
+                // If extractor has specific sources, use only those
+                return CheckSourcesList(assetPath, extractorSources);
+            }
+
+            // Fall back to global sources
+            if (metadata.extractionSources == null || metadata.extractionSources.Count == 0)
+                return true;
+
+            return CheckSourcesList(assetPath, metadata.extractionSources);
+        }
+
+        /// <summary>
+        /// Helper method to check if an asset path matches any source in a list
+        /// </summary>
+        private static bool CheckSourcesList(string assetPath, ExtractionSourcesList sources)
+        {
+            foreach (var source in sources.Items)
             {
                 if (source.type == ExtractionSourceType.Folder)
                 {
@@ -196,7 +228,7 @@ namespace PSS
             }
 
             // Clear metadata for keys that will be removed
-            if (updateMode == KeyUpdateMode.Replace)
+            if (updateMode == KeyUpdateMode.ReplaceCompletely)
             {
                 foreach (var key in translationData.allKeys)
                 {

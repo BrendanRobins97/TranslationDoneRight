@@ -14,108 +14,18 @@ namespace PSS
         private bool showCSVTools = true;
         private ReorderableList extractionSourcesList;
         private Vector2 sourceListScrollPosition;
+        private Dictionary<string, ReorderableList> extractorSourcesLists = new Dictionary<string, ReorderableList>();
+        private Dictionary<string, bool> extractorSourcesFoldoutStates = new Dictionary<string, bool>();
 
         private void InitializeExtractionSourcesList()
         {
             if (extractionSourcesList != null) return;
             
-            extractionSourcesList = new ReorderableList(
-                translationData.Metadata.extractionSources ?? new List<ExtractionSource>(),
-                typeof(ExtractionSource),
-                true, true, true, true);
-
-            extractionSourcesList.drawHeaderCallback = (Rect rect) =>
-            {
-                EditorGUI.LabelField(rect, "Extraction Sources (Empty = Full Project)");
-            };
-
-            extractionSourcesList.onAddCallback = (ReorderableList list) =>
-            {
-                if (translationData.Metadata.extractionSources == null)
-                {
-                    translationData.Metadata.extractionSources = new List<ExtractionSource>();
-                }
-                translationData.Metadata.extractionSources.Add(new ExtractionSource());
-                EditorUtility.SetDirty(translationData);
-            };
-
-            extractionSourcesList.onRemoveCallback = (ReorderableList list) =>
-            {
-                if (EditorUtility.DisplayDialog("Remove Source", 
-                    "Are you sure you want to remove this extraction source?", "Yes", "No"))
-                {
-                    translationData.Metadata.extractionSources.RemoveAt(list.index);
-                    EditorUtility.SetDirty(translationData);
-                }
-            };
-
-            extractionSourcesList.drawElementCallback = (Rect rect, int index, bool isActive, bool isFocused) =>
-            {
-                if (translationData.Metadata.extractionSources == null || index >= translationData.Metadata.extractionSources.Count)
-                    return;
-
-                var source = translationData.Metadata.extractionSources[index];
-                rect.y += 2;
-                rect.height = EditorGUIUtility.singleLineHeight;
-
-                // Calculate rects for the different elements
-                var typeRect = new Rect(rect.x, rect.y, 100, rect.height);
-                var pathRect = new Rect(rect.x + 105, rect.y, rect.width - 305, rect.height);
-                var recursiveRect = new Rect(rect.x + rect.width - 195, rect.y, 60, rect.height);
-                var browseRect = new Rect(rect.x + rect.width - 130, rect.y, 60, rect.height);
-                var pingRect = new Rect(rect.x + rect.width - 65, rect.y, 60, rect.height);
-
-                // Draw the type enum
-                source.type = (ExtractionSourceType)EditorGUI.EnumPopup(typeRect, source.type);
-
-                // Draw the path field
-                if (source.type == ExtractionSourceType.Folder)
-                {
-                    source.folderPath = EditorGUI.TextField(pathRect, source.folderPath);
-                    source.recursive = EditorGUI.Toggle(recursiveRect, new GUIContent("Recursive", "Include subfolders"), source.recursive);
-                }
-                else
-                {
-                    source.asset = EditorGUI.ObjectField(pathRect, source.asset, typeof(UnityEngine.Object), false) as UnityEngine.Object;
-                }
-
-                // Browse button
-                if (GUI.Button(browseRect, "Browse"))
-                {
-                    string title = source.type == ExtractionSourceType.Folder ? "Select Folder" : "Select Asset";
-                    string path = EditorUtility.OpenFolderPanel(title, "Assets", "");
-                    if (!string.IsNullOrEmpty(path))
-                    {
-                        if (path.StartsWith(Application.dataPath))
-                        {
-                            source.folderPath = "Assets" + path.Substring(Application.dataPath.Length);
-                            EditorUtility.SetDirty(translationData);
-                        }
-                        else
-                        {
-                            EditorUtility.DisplayDialog("Invalid Path", 
-                                "Please select a folder within your Unity project's Assets folder.", "OK");
-                        }
-                    }
-                }
-
-                // Ping button
-                if (GUI.Button(pingRect, "Ping"))
-                {
-                    if (source.type == ExtractionSourceType.Folder)
-                    {
-                        var folder = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(source.folderPath);
-                        if (folder != null)
-                            EditorGUIUtility.PingObject(folder);
-                    }
-                    else if (source.asset != null)
-                    {
-                        EditorGUIUtility.PingObject(source.asset);
-                    }
-                }
-
-                EditorUtility.SetDirty(translationData);
-            };
+            extractionSourcesList = ExtractionSourcesDrawer.CreateExtractionSourcesList(
+                translationData.Metadata.extractionSources,
+                "Extraction Sources (Empty = Full Project)",
+                () => EditorUtility.SetDirty(translationData)
+            );
         }
 
         private void DrawTextExtractionTab()
@@ -141,8 +51,9 @@ namespace PSS
                     
                     string modeDescription = updateMode switch
                     {
-                        KeyUpdateMode.Replace => "Replaces existing keys while preserving translations",
                         KeyUpdateMode.Merge => "Adds new keys while keeping existing ones",
+                        KeyUpdateMode.ReplaceCompletely => "Replaces existing keys completely",
+                        KeyUpdateMode.ReplaceButPreserveMissing => "Replaces existing keys but preserves meta data for missing translations",
                         _ => string.Empty
                     };
                     
@@ -159,65 +70,22 @@ namespace PSS
             if (showExtractionSources)
             {
                 EditorGUI.indentLevel++;
-
+                EditorGUILayout.LabelField("Specify folders or assets to include in text extraction. If no sources are specified, the entire project will be scanned.",
+                     EditorStyles.wordWrappedLabel);
                 // Draw the extraction sources list
                 using (new EditorGUILayout.VerticalScope(EditorGUIStyleUtility.CardStyle))
                 {
                     InitializeExtractionSourcesList();
-                    
-                    // Help box explaining the feature
-                    EditorGUILayout.HelpBox(
-                        "Specify folders or assets to include in text extraction. If no sources are specified, the entire project will be scanned.", 
-                        MessageType.Info);
-                    
+
                     sourceListScrollPosition = EditorGUILayout.BeginScrollView(sourceListScrollPosition, GUILayout.Height(Mathf.Min(200, extractionSourcesList.GetHeight())));
                     extractionSourcesList.DoLayoutList();
                     EditorGUILayout.EndScrollView();
 
-                    // Drag and drop area
-                    Rect dropArea = GUILayoutUtility.GetRect(0.0f, 50.0f, GUILayout.ExpandWidth(true));
-                    GUI.Box(dropArea, "Drag and drop folders or assets here", EditorStyles.helpBox);
-                    
-                    Event evt = Event.current;
-                    switch (evt.type)
-                    {
-                        case EventType.DragUpdated:
-                        case EventType.DragPerform:
-                            if (!dropArea.Contains(evt.mousePosition))
-                                break;
-                                
-                            DragAndDrop.visualMode = DragAndDropVisualMode.Copy;
-
-                            if (evt.type == EventType.DragPerform)
-                            {
-                                DragAndDrop.AcceptDrag();
-                                
-                                foreach (var path in DragAndDrop.paths)
-                                {
-                                    if (translationData.Metadata.extractionSources == null)
-                                        translationData.Metadata.extractionSources = new List<ExtractionSource>();
-
-                                    var source = new ExtractionSource
-                                    {
-                                        type = System.IO.Directory.Exists(path) ? 
-                                            ExtractionSourceType.Folder : ExtractionSourceType.Asset,
-                                        folderPath = path,
-                                        recursive = true
-                                    };
-
-                                    if (source.type == ExtractionSourceType.Asset)
-                                    {
-                                        source.asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path);
-                                    }
-
-                                    translationData.Metadata.extractionSources.Add(source);
-                                }
-                                
-                                EditorUtility.SetDirty(translationData);
-                                evt.Use();
-                            }
-                            break;
-                    }
+                    // Use the helper for drag and drop
+                    ExtractionSourcesDrawer.DrawDragAndDropArea(
+                        translationData.Metadata.extractionSources, 
+                        () => EditorUtility.SetDirty(translationData)
+                    );
                 }
 
                 EditorGUILayout.Space(10);
@@ -256,6 +124,52 @@ namespace PSS
                         if (isEnabled)
                         {
                             EditorGUILayout.LabelField(extractor.Description, EditorStyles.miniLabel);
+                            
+                            // Extractor-specific sources
+                            string extractorName = extractorType.Name;
+                            
+                            // Check if we have a reorderable list for this extractor
+                            if (!extractorSourcesLists.ContainsKey(extractorName))
+                            {
+                                // Make sure the extractor has an entry in the dictionary
+                                if (!translationData.Metadata.extractorSources.ContainsKey(extractorName))
+                                {
+                                    translationData.Metadata.extractorSources[extractorName] = new List<ExtractionSource>();
+                                    EditorUtility.SetDirty(translationData);
+                                }
+
+                                // Create the reorderable list
+                                extractorSourcesLists[extractorName] = ExtractionSourcesDrawer.CreateExtractionSourcesList(
+                                    translationData.Metadata.extractorSources[extractorName],
+                                    $"Sources for {extractor.SourceType} Extractor",
+                                    () => EditorUtility.SetDirty(translationData)
+                                );
+                            }
+                            
+                            // Draw the extractor-specific sources list
+                            EditorGUILayout.Space(5);
+                            
+                            bool showExtractorSources = EditorGUILayout.Foldout(
+                                GetExtractorSourcesFoldoutState(extractorName),
+                                $"Specific Sources for {extractor.SourceType} Extractor",
+                                true
+                            );
+                            
+                            SetExtractorSourcesFoldoutState(extractorName, showExtractorSources);
+                            
+                            if (showExtractorSources)
+                            {
+                                EditorGUILayout.LabelField("These sources are used only for this extractor. If none are specified, the global sources are used.",
+                                    EditorStyles.wordWrappedLabel);
+                                EditorGUILayout.Space(5);
+                                extractorSourcesLists[extractorName].DoLayoutList();
+                                
+                                // Drag and drop area for this extractor
+                                ExtractionSourcesDrawer.DrawDragAndDropArea(
+                                    translationData.Metadata.extractorSources[extractorName],
+                                    () => EditorUtility.SetDirty(translationData)
+                                );
+                            }
                         }
                     }
                     EditorGUILayout.Space(2);
@@ -282,7 +196,7 @@ namespace PSS
                         if (GUILayout.Button(new GUIContent("Extract and Update Keys", "Extract text and update TranslationData asset")))
                         {
                             if (EditorUtility.DisplayDialog("Extract Text", 
-                                $"This will {(updateMode == KeyUpdateMode.Replace ? "replace" : "merge")} translation keys. Existing translations will be preserved. Continue?", 
+                                $"This will {(updateMode == KeyUpdateMode.ReplaceCompletely ? "replace" : "merge")} translation keys. Existing translations will be preserved. Continue?", 
                                 "Extract", "Cancel"))
                             {
                                 var extractedText = TextExtractor.ExtractAllText();
@@ -487,6 +401,20 @@ namespace PSS
                     translationData
                 );
             }
+        }
+
+        private bool GetExtractorSourcesFoldoutState(string extractorName)
+        {
+            if (!extractorSourcesFoldoutStates.ContainsKey(extractorName))
+            {
+                extractorSourcesFoldoutStates[extractorName] = false;
+            }
+            return extractorSourcesFoldoutStates[extractorName];
+        }
+
+        private void SetExtractorSourcesFoldoutState(string extractorName, bool state)
+        {
+            extractorSourcesFoldoutStates[extractorName] = state;
         }
     }
 } 

@@ -5,6 +5,13 @@ using System.Linq;
 
 namespace PSS
 {
+    public enum KeyUpdateMode
+    {
+        Merge,
+        ReplaceCompletely,
+        ReplaceButPreserveMissing
+    }
+
     public partial class TranslationsEditorWindow : EditorWindow
     {
         private Vector2 scrollPosition;
@@ -12,6 +19,8 @@ namespace PSS
         private string newLanguageName = "";
         private string searchFilter = "";
         private bool showMissingOnly = false;
+        private bool showNewOnly = false;
+        private bool showMissingStateOnly = false;
         private bool showUnusedOnly = false;
         private Vector2 textScrollPosition;
         private string selectedKey = null;
@@ -31,7 +40,7 @@ namespace PSS
         private Dictionary<string, float> languageCoverage = new Dictionary<string, float>();
         private bool needsCoverageUpdate = true;
 
-        private KeyUpdateMode updateMode = KeyUpdateMode.Replace;
+        private KeyUpdateMode updateMode = KeyUpdateMode.Merge;
 
         private bool isDirty = false;
         private float saveDelay = 1f;
@@ -42,6 +51,8 @@ namespace PSS
         private bool includeContextInTranslation = true;
         private bool preserveFormatting = true;
         private bool formalityPreference = true;
+
+        private HashSet<string> previousKeys = new HashSet<string>();
 
         [MenuItem("Window/Translations")]
         public static void ShowWindow()
@@ -90,11 +101,45 @@ namespace PSS
         {
             EditorUtility.DisplayProgressBar("Extracting Text", "Starting extraction...", 0f);
             TextExtractor.Metadata = translationData?.Metadata;
+
+            // Store current keys for comparison
+            previousKeys = new HashSet<string>(translationData.allKeys);
+
+            // Only clear states in ReplaceCompletely mode
+            if (updateMode == KeyUpdateMode.ReplaceCompletely)
+            {
+                translationData.Metadata.ClearTextStates();
+            }
         }
 
         private void HandleExtractionComplete(HashSet<string> extractedText)
         {
             EditorUtility.ClearProgressBar();
+
+            // Mark new text in all modes
+            foreach (var text in extractedText)
+            {
+                if (!previousKeys.Contains(text) || translationData.Metadata.GetTextState(text) == TextState.Missing)
+                {
+                    translationData.Metadata.SetTextState(text, TextState.New);
+                } else {
+                    translationData.Metadata.SetTextState(text, TextState.None);
+                }
+            }
+
+            // Handle missing translations based on mode
+            if (updateMode == KeyUpdateMode.ReplaceButPreserveMissing)
+            {
+                // Keep track of missing translations that were removed
+                foreach (var oldKey in previousKeys)
+                {
+                    if (!extractedText.Contains(oldKey))
+                    {
+                        translationData.Metadata.SetTextState(oldKey, TextState.Missing);
+                    }
+                }
+            }
+
             needsCoverageUpdate = true;
             Repaint();
         }
@@ -124,6 +169,8 @@ namespace PSS
             includeContextInTranslation = EditorPrefs.GetBool("TranslationManager_IncludeContext", true);
             preserveFormatting = EditorPrefs.GetBool("TranslationManager_PreserveFormatting", true);
             formalityPreference = EditorPrefs.GetBool("TranslationManager_Formality", true);
+            showNewOnly = EditorPrefs.GetBool("TranslationManager_ShowNewOnly", false);
+            showMissingStateOnly = EditorPrefs.GetBool("TranslationManager_ShowMissingStateOnly", false);
         }
 
         private void SaveEditorPrefs()
@@ -136,6 +183,8 @@ namespace PSS
             EditorPrefs.SetBool("TranslationManager_IncludeContext", includeContextInTranslation);
             EditorPrefs.SetBool("TranslationManager_PreserveFormatting", preserveFormatting);
             EditorPrefs.SetBool("TranslationManager_Formality", formalityPreference);
+            EditorPrefs.SetBool("TranslationManager_ShowNewOnly", showNewOnly);
+            EditorPrefs.SetBool("TranslationManager_ShowMissingStateOnly", showMissingStateOnly);
         }
 
         private void OnGUI()

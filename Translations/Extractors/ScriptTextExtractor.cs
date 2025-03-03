@@ -8,27 +8,37 @@ using System.Linq;
 
 namespace PSS
 {
-    public class ScriptTextExtractor : ITextExtractor
+    public class ScriptTextExtractor : BaseTextExtractor
     {
-        public TextSourceType SourceType => TextSourceType.Script;
-        public int Priority => 80;
-        public bool EnabledByDefault => true;
-        public string Description => "Extracts text from all C# scripts in the project, finding Translate() and TranslateString() function calls.";
+        public override TextSourceType SourceType => TextSourceType.Script;
+        public override int Priority => 80;
+        public override bool EnabledByDefault => true;
+        public override string Description => "Extracts text from all C# scripts in the project, finding Translate() and TranslateString() function calls.";
 
-        public HashSet<string> ExtractText(TranslationMetadata metadata)
+        public override HashSet<string> ExtractText(TranslationMetadata metadata)
         {
-            var extractedText = new HashSet<string>();
+            HashSet<string> extractedText = new HashSet<string>();
             
-            // If no sources specified, search entire project
-            if (metadata.extractionSources == null || metadata.extractionSources.Count == 0)
-            {
-                string[] scriptGuids = AssetDatabase.FindAssets("t:Script");
-                ProcessScripts(scriptGuids, extractedText, metadata);
-                return extractedText;
-            }
+            return ITextExtractor.ProcessSourcesOrAll<string[]>(
+                this,
+                metadata,
+                () => {
+                    // Process all scripts
+                    string[] scriptGuids = AssetDatabase.FindAssets("t:Script");
+                    ProcessScripts(scriptGuids, extractedText, metadata);
+                    return extractedText;
+                },
+                (sources) => {
+                    // Process only scripts within specified sources
+                    ProcessSourceList(sources, extractedText, metadata);
+                    return extractedText;
+                }
+            );
+        }
 
-            // Search only within specified sources
-            foreach (var source in metadata.extractionSources)
+        private void ProcessSourceList(ExtractionSourcesList sources, HashSet<string> extractedText, TranslationMetadata metadata)
+        {
+            foreach (var source in sources.Items)
             {
                 string searchFolder = source.type == ExtractionSourceType.Folder ? source.folderPath : Path.GetDirectoryName(AssetDatabase.GetAssetPath(source.asset));
                 if (string.IsNullOrEmpty(searchFolder)) continue;
@@ -41,8 +51,6 @@ namespace PSS
                 string[] scriptGuids = AssetDatabase.FindAssets("t:Script", new[] { searchFolder });
                 ProcessScripts(scriptGuids, extractedText, metadata);
             }
-
-            return extractedText;
         }
 
         private void ProcessScripts(string[] scriptGuids, HashSet<string> extractedText, TranslationMetadata metadata)

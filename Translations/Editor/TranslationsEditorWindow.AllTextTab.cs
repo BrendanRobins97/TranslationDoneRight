@@ -194,7 +194,21 @@ namespace PSS
                         searchSettings.Update();
                         
                         EditorGUI.BeginChangeCheck();
-                        EditorGUILayout.PropertyField(searchFilterProp, GUIContent.none, GUILayout.ExpandWidth(true));
+                        
+                        // Make search box taller (3 lines)
+                        GUIStyle multilineSearchStyle = new GUIStyle(EditorStyles.textField)
+                        {
+                            wordWrap = true
+                        };
+                        
+                        float searchBoxHeight = EditorGUIUtility.singleLineHeight * 3;
+                        searchFilterProp.stringValue = EditorGUILayout.TextArea(
+                            searchFilterProp.stringValue, 
+                            multilineSearchStyle, 
+                            GUILayout.ExpandWidth(true),
+                            GUILayout.Height(searchBoxHeight)
+                        );
+                        
                         if (EditorGUI.EndChangeCheck())
                         {
                             searchSettings.ApplyModifiedProperties();
@@ -270,13 +284,24 @@ namespace PSS
 
                     GUILayout.Space(10);
 
-                    // Right side - Toggle Filters
-                    using (new EditorGUILayout.HorizontalScope(GUILayout.Width(GetHalfCardWidth() - 25)))
+                    // Right side - Toggle Filters in a vertical layout
+                    using (new EditorGUILayout.VerticalScope(GUILayout.Width(GetHalfCardWidth() - 25)))
                     {
+                        EditorGUILayout.LabelField("Filter Options:", EditorStyles.boldLabel);
+                        
                         showMissingOnly = EditorGUILayout.ToggleLeft(
-                            new GUIContent("Missing Only", "Show only keys with missing translations"),
-                            showMissingOnly,
-                            GUILayout.Width(100)
+                            new GUIContent("Needs Translations", "Show only keys that need translations"),
+                            showMissingOnly
+                        );
+                        
+                        showNewOnly = EditorGUILayout.ToggleLeft(
+                            new GUIContent("New", "Show only keys with New state"),
+                            showNewOnly
+                        );
+                        
+                        showMissingStateOnly = EditorGUILayout.ToggleLeft(
+                            new GUIContent("Missing", "Show only keys with Missing state"),
+                            showMissingStateOnly
                         );
                         
                         if (GUI.changed)
@@ -381,10 +406,10 @@ namespace PSS
                             GUILayout.Space(10);
 
                             // Check if any selected items have missing translations and count them
-                            int missingCount = selectedKeys.Count(k => HasMissingTranslations(k));
+                            int missingCount = selectedKeys.Count(k => NeedsTranslations(k));
                             if (missingCount > 0)
                             {
-                                if (GUILayout.Button($"Translate Missing ({missingCount})", buttonStyle, GUILayout.Width(250), GUILayout.Height(30)))
+                                if (GUILayout.Button($"Translations Needed ({missingCount})", buttonStyle, GUILayout.Width(250), GUILayout.Height(30)))
                                 {
                                     foreach (var selectedKey in selectedKeys)
                                     {
@@ -857,6 +882,23 @@ namespace PSS
 
             textScrollPosition = GUI.BeginScrollView(scrollViewRect, textScrollPosition, contentRect);
 
+            // Create styles for the labels
+            var newLabelStyle = new GUIStyle(EditorStyles.miniLabel)
+            {
+                normal = { textColor = new Color(0.3f, 0.7f, 0.3f) },
+                fontSize = 9,
+                alignment = TextAnchor.MiddleRight,
+                padding = new RectOffset(0, 2, 0, 0)
+            };
+
+            var missingLabelStyle = new GUIStyle(EditorStyles.miniLabel)
+            {
+                normal = { textColor = new Color(0.7f, 0.3f, 0.3f) },
+                fontSize = 9,
+                alignment = TextAnchor.MiddleRight,
+                padding = new RectOffset(0, 2, 0, 0)
+            };
+
             if (filteredKeysList.Count > 0)
             {
                 // Calculate which items should be visible
@@ -891,9 +933,44 @@ namespace PSS
                         EditorGUI.DrawRect(itemRect, new Color(0.5f, 0.5f, 0.5f, 0.1f));
                     }
 
-                    // Draw the key text with padding
-                    Rect textRect = new Rect(itemRect.x + 5, itemRect.y, itemRect.width - 10, itemRect.height);
-                    EditorGUI.LabelField(textRect, key);
+                    // Calculate rects for key text and labels
+                    float labelWidth = 35; // Width for each label
+                    float padding = 5;
+                    Rect textRect = new Rect(itemRect.x + padding, itemRect.y, itemRect.width - (labelWidth * 2) - (padding * 3), itemRect.height);
+                    Rect missingLabelRect = new Rect(textRect.xMax + padding, itemRect.y, labelWidth, itemRect.height);
+                    Rect newLabelRect = new Rect(missingLabelRect.xMax + padding, itemRect.y, labelWidth, itemRect.height);
+
+                    // Draw the truncated key text
+                    string displayText = key;
+                    GUIStyle keyStyle = new GUIStyle(EditorStyles.label);
+                    
+                    // Make the text slightly yellow if it needs translations
+                    if (NeedsTranslations(key))
+                    {
+                        keyStyle.normal.textColor = new Color(0.9f, 0.82f, 0.4f); // Slightly yellow
+                    }
+                    
+                    float maxWidth = textRect.width;
+                    if (keyStyle.CalcSize(new GUIContent(displayText)).x > maxWidth)
+                    {
+                        while (keyStyle.CalcSize(new GUIContent(displayText + "...")).x > maxWidth && displayText.Length > 0)
+                        {
+                            displayText = displayText.Substring(0, displayText.Length - 1);
+                        }
+                        displayText += "...";
+                    }
+                    
+                    EditorGUI.LabelField(textRect, displayText, keyStyle);
+
+                    // Draw the state labels
+                    if (translationData.Metadata.IsMissingText(key))
+                    {
+                        EditorGUI.LabelField(missingLabelRect, "missing", missingLabelStyle);
+                    }
+                    if (translationData.Metadata.IsNewText(key))
+                    {
+                        EditorGUI.LabelField(newLabelRect, "new", newLabelStyle);
+                    }
 
                     // Handle mouse events for selection
                     if (Event.current.type == EventType.MouseDown && itemRect.Contains(Event.current.mousePosition))
@@ -991,10 +1068,22 @@ namespace PSS
             var initialKeys = translationData.allKeys
                 .Where(k => !translationData.HasDifferentCanonicalVersion(k));
 
-            // Apply missing filter if enabled
+            // Apply missing translations filter if enabled
             if (showMissingOnly)
             {
-                initialKeys = initialKeys.Where(HasMissingTranslations);
+                initialKeys = initialKeys.Where(NeedsTranslations);
+            }
+            
+            // Apply New state filter if enabled
+            if (showNewOnly)
+            {
+                initialKeys = initialKeys.Where(k => translationData.Metadata.IsNewText(k));
+            }
+            
+            // Apply Missing state filter if enabled
+            if (showMissingStateOnly)
+            {
+                initialKeys = initialKeys.Where(k => translationData.Metadata.IsMissingText(k));
             }
 
             // If no search filter, use the current filtered list
@@ -1133,10 +1222,10 @@ namespace PSS
                         GUILayout.Space(10);
 
                         // Check if any selected items have missing translations and count them
-                        int missingCount = selectedKeys.Count(k => HasMissingTranslations(k));
+                        int missingCount = selectedKeys.Count(k => NeedsTranslations(k));
                         if (missingCount > 0)
                         {
-                            if (GUILayout.Button($"Translate Missing ({missingCount})", buttonStyle, GUILayout.Width(200)))
+                            if (GUILayout.Button($"Translations Needed ({missingCount})", buttonStyle, GUILayout.Width(200)))
                             {
                                 foreach (var selectedKey in selectedKeys)
                                 {
@@ -1226,6 +1315,7 @@ namespace PSS
                             TextSourceType.Prefab => "Prefab Icon",
                             TextSourceType.Script => "cs Script Icon",
                             TextSourceType.ScriptableObject => "ScriptableObject Icon",
+                            TextSourceType.ExternalFile => "TextAsset Icon",
                             _ => "TextAsset Icon"
                         };
 
@@ -1653,7 +1743,7 @@ namespace PSS
             }
         }
 
-        private bool HasMissingTranslations(string key)
+        private bool NeedsTranslations(string key)
         {
             int keyIndex = translationData.allKeys.IndexOf(key);
             
@@ -1666,13 +1756,14 @@ namespace PSS
                 if (languageData != null && keyIndex >= 0 && keyIndex < languageData.allText.Count)
                 {
                     string translation = languageData.allText[keyIndex];
-                    // Only consider it missing if it's empty or whitespace
+                    // Consider it needing translations if it's empty or whitespace
                     if (string.IsNullOrWhiteSpace(translation))
                     {
                         return true;
                     }
                 }
             }
+            
             return false;
         }
     }

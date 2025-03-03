@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEditor;
 using System.Collections.Generic;
 using System.Reflection;
+using System.IO;
 
 namespace PSS
 {
@@ -16,13 +17,49 @@ namespace PSS
         public HashSet<string> ExtractText(TranslationMetadata metadata)
         {
             var extractedText = new HashSet<string>();
-            string[] prefabGuids = AssetDatabase.FindAssets("t:Prefab");
-
+            
+            return ITextExtractor.ProcessSourcesOrAll<string[]>(
+                this,
+                metadata,
+                () => {
+                    // Process all prefabs
+                    string[] prefabGuids = AssetDatabase.FindAssets("t:Prefab");
+                    ProcessPrefabs(prefabGuids, extractedText, metadata);
+                    return extractedText;
+                },
+                (sources) => {
+                    // Process only prefabs within specified sources
+                    ProcessSourceList(sources, extractedText, metadata);
+                    return extractedText;
+                }
+            );
+        }
+        
+        private void ProcessSourceList(ExtractionSourcesList sources, HashSet<string> extractedText, TranslationMetadata metadata)
+        {
+            foreach (var source in sources.Items)
+            {
+                string searchFolder = source.type == ExtractionSourceType.Folder ? source.folderPath : Path.GetDirectoryName(AssetDatabase.GetAssetPath(source.asset));
+                
+                if (string.IsNullOrEmpty(searchFolder)) continue;
+                
+                // Normalize path
+                searchFolder = searchFolder.Replace('\\', '/').TrimStart('/');
+                if (!searchFolder.StartsWith("Assets/"))
+                    searchFolder = "Assets/" + searchFolder;
+                
+                string[] prefabGuids = AssetDatabase.FindAssets("t:Prefab", new[] { searchFolder });
+                ProcessPrefabs(prefabGuids, extractedText, metadata);
+            }
+        }
+        
+        private void ProcessPrefabs(string[] prefabGuids, HashSet<string> extractedText, TranslationMetadata metadata)
+        {
             foreach (string guid in prefabGuids)
             {
                 string path = AssetDatabase.GUIDToAssetPath(guid);
                 GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
-
+                
                 if (prefab != null)
                 {
                     Component[] allComponents = prefab.GetComponentsInChildren<Component>(true);
@@ -33,7 +70,7 @@ namespace PSS
                             Debug.LogWarning("Null component found in prefab: " + path);
                             continue;
                         }
-
+                        
                         ExtractFieldsRecursive(
                             component, 
                             extractedText, 
@@ -45,8 +82,6 @@ namespace PSS
                     }
                 }
             }
-
-            return extractedText;
         }
 
         private void ExtractFieldsRecursive(object obj, HashSet<string> extractedText, TranslationMetadata metadata, string sourcePath, string objectPath, bool wasInactive)

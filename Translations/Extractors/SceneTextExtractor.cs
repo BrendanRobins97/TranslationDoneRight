@@ -19,31 +19,86 @@ namespace PSS
         public HashSet<string> ExtractText(TranslationMetadata metadata)
         {
             var extractedText = new HashSet<string>();
-
-            for (int i = 0; i < EditorBuildSettings.scenes.Length; i++)
-            {
-                string scenePath = EditorBuildSettings.scenes[i].path;
-                Scene scene = SceneManager.GetSceneByPath(scenePath);
-
-                if (!scene.isLoaded)
-                {
-                    scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
+            
+            return ITextExtractor.ProcessSourcesOrAll<EditorBuildSettingsScene[]>(
+                this,
+                metadata,
+                () => {
+                    // Process all scenes
+                    ProcessScenes(EditorBuildSettings.scenes, extractedText, metadata);
+                    return extractedText;
+                },
+                (sources) => {
+                    // Process only scenes within specified sources
+                    ProcessScenesBySource(sources, extractedText, metadata);
+                    return extractedText;
                 }
-
-                // Extract TextMeshPro texts
-                ExtractTMProTexts(scene, extractedText, metadata, scenePath);
-
-                // Extract UI Text texts
-                ExtractUITexts(scene, extractedText, metadata, scenePath);
-
-                // Extract fields marked with TranslatedAttribute
-                foreach (GameObject rootObj in scene.GetRootGameObjects())
+            );
+        }
+        
+        private void ProcessScenesBySource(ExtractionSourcesList sources, HashSet<string> extractedText, TranslationMetadata metadata)
+        {
+            foreach (var source in sources.Items)
+            {
+                if (source.type == ExtractionSourceType.Asset && source.asset != null)
                 {
-                    ExtractFromGameObject(rootObj, extractedText, metadata, scenePath);
+                    // If it's a direct scene asset
+                    string scenePath = AssetDatabase.GetAssetPath(source.asset);
+                    if (scenePath.EndsWith(".unity"))
+                    {
+                        ProcessScene(scenePath, extractedText, metadata);
+                    }
+                }
+                else if (source.type == ExtractionSourceType.Folder)
+                {
+                    // Search for scenes in folder
+                    string searchFolder = source.folderPath;
+                    if (string.IsNullOrEmpty(searchFolder)) continue;
+                    
+                    // Normalize path
+                    searchFolder = searchFolder.Replace('\\', '/').TrimStart('/');
+                    if (!searchFolder.StartsWith("Assets/"))
+                        searchFolder = "Assets/" + searchFolder;
+                    
+                    string[] sceneGuids = AssetDatabase.FindAssets("t:Scene", new[] { searchFolder });
+                    foreach (string guid in sceneGuids)
+                    {
+                        string scenePath = AssetDatabase.GUIDToAssetPath(guid);
+                        ProcessScene(scenePath, extractedText, metadata);
+                    }
                 }
             }
+        }
+        
+        private void ProcessScenes(EditorBuildSettingsScene[] scenes, HashSet<string> extractedText, TranslationMetadata metadata)
+        {
+            foreach (var sceneSettings in scenes)
+            {
+                string scenePath = sceneSettings.path;
+                ProcessScene(scenePath, extractedText, metadata);
+            }
+        }
+        
+        private void ProcessScene(string scenePath, HashSet<string> extractedText, TranslationMetadata metadata)
+        {
+            Scene scene = SceneManager.GetSceneByPath(scenePath);
 
-            return extractedText;
+            if (!scene.isLoaded)
+            {
+                scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
+            }
+
+            // Extract TextMeshPro texts
+            ExtractTMProTexts(scene, extractedText, metadata, scenePath);
+
+            // Extract UI Text texts
+            ExtractUITexts(scene, extractedText, metadata, scenePath);
+
+            // Extract fields marked with TranslatedAttribute
+            foreach (GameObject rootObj in scene.GetRootGameObjects())
+            {
+                ExtractFromGameObject(rootObj, extractedText, metadata, scenePath);
+            }
         }
 
         private void ExtractTMProTexts(Scene scene, HashSet<string> extractedText, TranslationMetadata metadata, string scenePath)

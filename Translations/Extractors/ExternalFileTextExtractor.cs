@@ -31,7 +31,7 @@ namespace PSS
             public string value;
         }
 
-        public TextSourceType SourceType => TextSourceType.Script;
+        public TextSourceType SourceType => TextSourceType.ExternalFile;
         public int Priority => 60; // Lower priority than built-in extractors
         public bool EnabledByDefault => true;
         public string Description => "Extracts text from external files (JSON, CSV, XML, TXT) in configured directories.";
@@ -68,7 +68,25 @@ namespace PSS
         public HashSet<string> ExtractText(TranslationMetadata metadata)
         {
             var extractedText = new HashSet<string>();
-
+            
+            return ITextExtractor.ProcessSourcesOrAll<string[]>(
+                this,
+                metadata,
+                () => {
+                    // Process default search paths
+                    ProcessDefaultPaths(extractedText, metadata);
+                    return extractedText;
+                },
+                (sources) => {
+                    // Process only external files within specified sources
+                    ProcessSourceList(sources, extractedText, metadata);
+                    return extractedText;
+                }
+            );
+        }
+        
+        private void ProcessDefaultPaths(HashSet<string> extractedText, TranslationMetadata metadata)
+        {
             foreach (string basePath in DefaultSearchPaths)
             {
                 if (!Directory.Exists(basePath)) continue;
@@ -77,35 +95,80 @@ namespace PSS
                 var files = SupportedExtensions
                     .SelectMany(ext => Directory.GetFiles(basePath, $"*{ext}", SearchOption.AllDirectories));
 
-                foreach (string filePath in files)
+                ProcessFiles(files, extractedText, metadata);
+            }
+        }
+        
+        private void ProcessSourceList(ExtractionSourcesList sources, HashSet<string> extractedText, TranslationMetadata metadata)
+        {
+            foreach (var source in sources.Items)
+            {
+                if (source.type == ExtractionSourceType.Asset && source.asset != null)
                 {
+                    // If it's a direct file asset
+                    string filePath = AssetDatabase.GetAssetPath(source.asset);
                     string extension = Path.GetExtension(filePath).ToLower();
-                    try
+                    
+                    if (SupportedExtensions.Contains(extension))
                     {
-                        switch (extension)
-                        {
-                            case ".json":
-                                ExtractFromJson(filePath, extractedText, metadata);
-                                break;
-                            case ".csv":
-                                ExtractFromCsv(filePath, extractedText, metadata);
-                                break;
-                            case ".xml":
-                                ExtractFromXml(filePath, extractedText, metadata);
-                                break;
-                            case ".txt":
-                                ExtractFromTxt(filePath, extractedText, metadata);
-                                break;
-                        }
-                    }
-                    catch (System.Exception e)
-                    {
-                        Debug.LogWarning($"Failed to extract text from {filePath}: {e.Message}");
+                        ProcessFile(filePath, extension, extractedText, metadata);
                     }
                 }
+                else if (source.type == ExtractionSourceType.Folder)
+                {
+                    // Search for supported files in folder
+                    string searchFolder = source.folderPath;
+                    if (string.IsNullOrEmpty(searchFolder)) continue;
+                    
+                    // Normalize path
+                    searchFolder = searchFolder.Replace('\\', '/').TrimStart('/');
+                    if (!searchFolder.StartsWith("Assets/"))
+                        searchFolder = "Assets/" + searchFolder;
+                    
+                    if (!Directory.Exists(searchFolder)) continue;
+                    
+                    SearchOption option = source.recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
+                    var files = SupportedExtensions
+                        .SelectMany(ext => Directory.GetFiles(searchFolder, $"*{ext}", option));
+                    
+                    ProcessFiles(files, extractedText, metadata);
+                }
             }
-
-            return extractedText;
+        }
+        
+        private void ProcessFiles(IEnumerable<string> files, HashSet<string> extractedText, TranslationMetadata metadata)
+        {
+            foreach (string filePath in files)
+            {
+                string extension = Path.GetExtension(filePath).ToLower();
+                ProcessFile(filePath, extension, extractedText, metadata);
+            }
+        }
+        
+        private void ProcessFile(string filePath, string extension, HashSet<string> extractedText, TranslationMetadata metadata)
+        {
+            try
+            {
+                switch (extension)
+                {
+                    case ".json":
+                        ExtractFromJson(filePath, extractedText, metadata);
+                        break;
+                    case ".csv":
+                        ExtractFromCsv(filePath, extractedText, metadata);
+                        break;
+                    case ".xml":
+                        ExtractFromXml(filePath, extractedText, metadata);
+                        break;
+                    case ".txt":
+                        ExtractFromTxt(filePath, extractedText, metadata);
+                        break;
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning($"Failed to extract text from {filePath}: {e.Message}");
+            }
         }
 
         private void ExtractFromJson(string filePath, HashSet<string> extractedText, TranslationMetadata metadata)
@@ -323,7 +386,7 @@ namespace PSS
             
             var sourceInfo = new TextSourceInfo
             {
-                sourceType = TextSourceType.Script,
+                sourceType = TextSourceType.ExternalFile,
                 sourcePath = filePath,
                 componentName = Path.GetFileName(filePath),
                 fieldName = location

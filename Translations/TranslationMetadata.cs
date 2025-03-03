@@ -2,6 +2,7 @@ using UnityEngine;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Sirenix.Utilities;
 
 namespace PSS
 {
@@ -10,7 +11,8 @@ namespace PSS
         Scene,
         Prefab,
         Script,
-        ScriptableObject
+        ScriptableObject,
+        ExternalFile
     }
 
     [Serializable]
@@ -56,6 +58,16 @@ namespace PSS
         public static implicit operator List<string>(StringList wrapper) => wrapper.Items;
         public static implicit operator StringList(List<string> list) => new StringList { Items = list };
     }
+
+    [Serializable]
+    public class ExtractionSourcesList
+    {
+        public List<ExtractionSource> Items = new List<ExtractionSource>();
+
+        // Implicit conversion operators for easier usage
+        public static implicit operator List<ExtractionSource>(ExtractionSourcesList wrapper) => wrapper.Items;
+        public static implicit operator ExtractionSourcesList(List<ExtractionSource> list) => new ExtractionSourcesList { Items = list };
+    }
     
 
     [Serializable]
@@ -68,6 +80,13 @@ namespace PSS
         public DateTime lastModifiedTime;
     }
 
+    public enum TextState
+    {
+        None,
+        New,
+        Missing,
+    }
+
     [System.Serializable]
     public class TranslationMetadata : ScriptableObject
     {
@@ -78,32 +97,17 @@ namespace PSS
         [SerializeField]
         private SerializableDictionary<string, SimilarityGroupMetadata> similarityGroupMetadata = new SerializableDictionary<string, SimilarityGroupMetadata>();
 
+        // Track text states (new/missing/both)
+        [SerializeField]
+        private SerializableDictionary<string, TextState> textStates = new SerializableDictionary<string, TextState>();
+
         // Add list of text categories
         [SerializeField]
-        private SerializableDictionary<string, StringList> textCategories = new SerializableDictionary<string, StringList>() {
-            {
-                "UI",
-                new StringList
-                {
-                    Items = new List<string> { "Button" }
-                }
-            }
-        };
+        private SerializableDictionary<string, StringList> textCategories = new SerializableDictionary<string, StringList>();
 
         // Add category templates
         [SerializeField]
-        private SerializableDictionary<string, CategoryTemplate> categoryTemplates = new SerializableDictionary<string, CategoryTemplate>() {
-            {
-                "UI", new CategoryTemplate {
-                    format = "This text appears in {value}"
-                }
-            },
-            {
-                "Manual", new CategoryTemplate {
-                    format = "{value}" // Manual entries are free-form
-                }
-            }
-        };
+        private SerializableDictionary<string, CategoryTemplate> categoryTemplates = new SerializableDictionary<string, CategoryTemplate>();
 
         public SerializableDictionary<string, StringList> TextCategories => textCategories;
         public SerializableDictionary<string, CategoryTemplate> CategoryTemplates => categoryTemplates;
@@ -116,20 +120,33 @@ namespace PSS
         private SerializableDictionary<string, string> customLanguageMappings = new SerializableDictionary<string, string>();
         public SerializableDictionary<string, string> CustomLanguageMappings => customLanguageMappings;
         public List<ExtractionSource> extractionSources = new List<ExtractionSource>();
+
+        [SerializeField]
+        public SerializableDictionary<string, ExtractionSourcesList> extractorSources = new SerializableDictionary<string, ExtractionSourcesList>();
+        
         public void UpdateTextCategory(string key, string oldCategory, string newCategory)
         {
             if (textCategories.ContainsKey(key))
             {
-                textCategories[key].Items.Add(newCategory);
-                // Update all existing contexts using this category
-                foreach (var textKey in textContexts.Keys)
+                if (!textCategories[key].Items.Contains(newCategory))
                 {
-                    var context = textContexts[textKey];
-                    if (context.ContainsKey(key) && context[key] == oldCategory)
+                    textCategories[key].Items.Add(newCategory);
+                }
+                if (!oldCategory.IsNullOrWhitespace())
+                {
+                    // Update all existing contexts using this category
+                    foreach (var textKey in textContexts.Keys.ToList())
                     {
-                        context[key] = newCategory;
+                        foreach (var context in textContexts[textKey].ToList())
+                        {
+                            if (context.Value == oldCategory)
+                            {
+                                textContexts[textKey][key] = newCategory;
+                            }
+                        }
                     }
                 }
+                textCategories[key].Items.Remove(oldCategory);
             }
         }
 
@@ -292,6 +309,31 @@ namespace PSS
         public void UpdateCategoryTemplate(string categoryName, CategoryTemplate template)
         {
             categoryTemplates[categoryName] = template;
+        }
+
+        public bool IsNewText(string text)
+        {
+            return textStates.TryGetValue(text, out var state) && (state == TextState.New);
+        }
+
+        public bool IsMissingText(string text)
+        {
+            return textStates.TryGetValue(text, out var state) && (state == TextState.Missing);
+        }
+
+        public TextState GetTextState(string text)
+        {
+            return textStates.TryGetValue(text, out var state) ? state : TextState.None;
+        }
+
+        public void SetTextState(string text, TextState state)
+        {
+            textStates[text] = state;
+        }
+
+        public void ClearTextStates()
+        {
+            textStates.Clear();
         }
     }
 } 

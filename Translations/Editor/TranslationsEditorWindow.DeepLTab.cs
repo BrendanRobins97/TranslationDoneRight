@@ -11,9 +11,67 @@ namespace PSS
         private const int MAX_BATCH_SIZE = 50; // DeepL's maximum batch size
         private const int MAX_RETRIES = 3;  // Maximum number of retry attempts
         private const int INITIAL_RETRY_DELAY_MS = 1000; // Start with 1 second delay
+        private const int MAX_LOG_ENTRIES = 1000; // Maximum number of log entries to keep
+        
+        private List<(string message, LogType type, System.DateTime timestamp)> deeplLogs = new List<(string, LogType, System.DateTime)>();
+        private Vector2 deeplLogScrollPosition;
+        private bool showDeeplLogs = true;
+        private GUIStyle logStyle;
+        private GUIStyle errorLogStyle;
+        private GUIStyle warningLogStyle;
+        private bool logStylesInitialized;
+        private bool shouldScrollToBottom;
+
+        private void InitializeLogStyles()
+        {
+            if (logStylesInitialized) return;
+            
+            logStyle = new GUIStyle(EditorStyles.label)
+            {
+                fontSize = 11,
+                wordWrap = true,
+                richText = true
+            };
+
+            errorLogStyle = new GUIStyle(logStyle);
+            errorLogStyle.normal.textColor = new Color(0.9f, 0.3f, 0.3f);
+
+            warningLogStyle = new GUIStyle(logStyle);
+            warningLogStyle.normal.textColor = new Color(0.9f, 0.8f, 0.3f);
+
+            logStylesInitialized = true;
+        }
+
+        private void AddDeepLLog(string message, LogType type = LogType.Log)
+        {
+            if (UnityThread.isMainThread)
+            {
+                deeplLogs.Add((message, type, System.DateTime.Now));
+                if (deeplLogs.Count > MAX_LOG_ENTRIES)
+                {
+                    deeplLogs.RemoveAt(0);
+                }
+                shouldScrollToBottom = true;
+                Repaint();
+            }
+            else
+            {
+                EditorApplication.delayCall += () =>
+                {
+                    deeplLogs.Add((message, type, System.DateTime.Now));
+                    if (deeplLogs.Count > MAX_LOG_ENTRIES)
+                    {
+                        deeplLogs.RemoveAt(0);
+                    }
+                    shouldScrollToBottom = true;
+                    Repaint();
+                };
+            }
+        }
 
         private void DrawDeepLTab()
         {
+            InitializeLogStyles();
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             
             EditorGUILayout.LabelField("DeepL Translation Settings", EditorStyles.boldLabel);
@@ -161,6 +219,54 @@ namespace PSS
                 TestDeepLConnection();
             }
 
+            EditorGUILayout.Space(10);
+
+            // Log Display Area
+            EditorGUILayout.LabelField("Translation Logs", EditorStyles.boldLabel);
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            
+            showDeeplLogs = EditorGUILayout.Foldout(showDeeplLogs, "Show Logs", true);
+            if (showDeeplLogs)
+            {
+                EditorGUILayout.BeginHorizontal();
+                if (GUILayout.Button("Clear Logs", GUILayout.Width(100)))
+                {
+                    deeplLogs.Clear();
+                    Repaint();
+                }
+                if (GUILayout.Button("Copy All", GUILayout.Width(100)))
+                {
+                    var logText = string.Join("\n", deeplLogs.Select(log => $"[{log.timestamp:HH:mm:ss}] {log.message}"));
+                    EditorGUIUtility.systemCopyBuffer = logText;
+                }
+                EditorGUILayout.EndHorizontal();
+
+                deeplLogScrollPosition = EditorGUILayout.BeginScrollView(deeplLogScrollPosition, GUILayout.Height(200));
+                
+                // Display logs in chronological order (oldest to newest)
+                foreach (var (message, type, timestamp) in deeplLogs)
+                {
+                    var style = type switch
+                    {
+                        LogType.Error => errorLogStyle,
+                        LogType.Warning => warningLogStyle,
+                        _ => logStyle
+                    };
+
+                    EditorGUILayout.LabelField($"[{timestamp:HH:mm:ss}] {message}", style);
+                }
+
+                if (shouldScrollToBottom && Event.current.type == EventType.Repaint)
+                {
+                    deeplLogScrollPosition.y = float.MaxValue;
+                    shouldScrollToBottom = false;
+                }
+                
+                EditorGUILayout.EndScrollView();
+            }
+            
+            EditorGUILayout.EndVertical();
+
             EditorGUILayout.EndVertical();
         }
 
@@ -168,12 +274,14 @@ namespace PSS
         {
             if (string.IsNullOrEmpty(deeplApiKey))
             {
+                AddDeepLLog("Please enter an API key first.", LogType.Warning);
                 EditorUtility.DisplayDialog("DeepL Test", "Please enter an API key first.", "OK");
                 return;
             }
 
             try
             {
+                AddDeepLLog("Testing DeepL API connection...");
                 using (var client = new System.Net.Http.HttpClient())
                 {
                     client.DefaultRequestHeaders.Add("Authorization", $"DeepL-Auth-Key {deeplApiKey}");
@@ -182,16 +290,22 @@ namespace PSS
                     
                     if (response.IsSuccessStatusCode)
                     {
+                        var result = await response.Content.ReadAsStringAsync();
+                        AddDeepLLog("Connection successful! API key is valid.");
+                        AddDeepLLog($"Usage info: {result}");
                         EditorUtility.DisplayDialog("DeepL Test", "Connection successful! API key is valid.", "OK");
                     }
                     else
                     {
+                        var error = await response.Content.ReadAsStringAsync();
+                        AddDeepLLog($"Connection failed: {error}", LogType.Error);
                         EditorUtility.DisplayDialog("DeepL Test", "Connection failed. Please check your API key and settings.", "OK");
                     }
                 }
             }
             catch (System.Exception e)
             {
+                AddDeepLLog($"Error testing connection: {e.Message}", LogType.Error);
                 EditorUtility.DisplayDialog("DeepL Test", $"Error testing connection: {e.Message}", "OK");
             }
         }
@@ -222,13 +336,7 @@ namespace PSS
 
             int retryCount = 0;
             int delayMs = INITIAL_RETRY_DELAY_MS;
-
-            // Debug log the translation request details
-            Debug.Log($"Translation Request Details:");
-            Debug.Log($"Texts to translate: {string.Join(", ", texts)}");
-            Debug.Log($"Target language: {targetLanguage}");
             string contextToUse = contexts?.FirstOrDefault() ?? "";
-            Debug.Log($"Context to be sent: {contextToUse}");
 
             while (retryCount <= MAX_RETRIES)
             {
@@ -255,16 +363,12 @@ namespace PSS
                         }
 
                         var json = JsonUtility.ToJson(request);
-                        Debug.Log($"Full DeepL API request payload: {json}");
-
                         var content = new System.Net.Http.StringContent(json, System.Text.Encoding.UTF8, "application/json");
-
                         var response = await client.PostAsync($"{baseUrl}/translate", content);
                         
                         if (response.IsSuccessStatusCode)
                         {
                             var result = await response.Content.ReadAsStringAsync();
-                            Debug.Log($"DeepL API response: {result}");
                             var jsonResponse = JsonUtility.FromJson<BatchTranslationResponse>(result);
                             return jsonResponse?.translations?.Select(t => t.text).ToList();
                         }
@@ -277,7 +381,7 @@ namespace PSS
                             {
                                 if (retryCount < MAX_RETRIES)
                                 {
-                                    Debug.LogWarning($"DeepL rate limit hit. Retrying in {delayMs/1000f} seconds... (Attempt {retryCount + 1}/{MAX_RETRIES})");
+                                    AddDeepLLog($"Rate limit hit. Retrying in {delayMs/1000f}s (Attempt {retryCount + 1}/{MAX_RETRIES})", LogType.Warning);
                                     await Task.Delay(delayMs);
                                     delayMs *= 2; // Exponential backoff
                                     retryCount++;
@@ -285,10 +389,10 @@ namespace PSS
                                 }
                             }
                             
-                            Debug.LogError($"DeepL batch translation failed {response.StatusCode}: {error}");
+                            AddDeepLLog($"Translation failed ({response.StatusCode}): {error}", LogType.Error);
                             if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
                             {
-                                Debug.LogError("Rate limit exceeded. Please wait a few minutes before trying again, or consider upgrading to DeepL Pro for higher limits.");
+                                AddDeepLLog("Consider upgrading to DeepL Pro for higher rate limits.", LogType.Warning);
                             }
                             return null;
                         }
@@ -296,7 +400,7 @@ namespace PSS
                 }
                 catch (System.Exception e)
                 {
-                    Debug.LogError($"Batch translation error: {e.Message}");
+                    AddDeepLLog($"Translation error: {e.Message}", LogType.Error);
                     return null;
                 }
             }
@@ -308,22 +412,16 @@ namespace PSS
         {
             if (string.IsNullOrEmpty(deeplApiKey) || translationData == null) return;
 
-            // Only get context if the includeContextInTranslation flag is true
-            string context = includeContextInTranslation ? translationData.Metadata.GetTranslationContext(key) : "";
-            Debug.Log($"Context for key '{key}': {context}");
-            
             int keyIndex = translationData.allKeys.IndexOf(key);
-            
             if (keyIndex == -1) return;
 
-            Debug.Log($"Starting translation for key: {key}");
+            AddDeepLLog($"Starting translations for '{key}'");
             
             try
             {
                 var languages = translationData.supportedLanguages.Skip(1).ToList(); // Skip default language
                 var tasks = new List<Task>();
-                var progressLock = new object();
-                int completedLanguages = 0;
+                int totalLanguages = languages.Count;
 
                 // Pre-load all language data on the main thread
                 var languageDataDict = new Dictionary<string, LanguageData>();
@@ -346,6 +444,8 @@ namespace PSS
                 var languageGroups = languages
                     .GroupBy(l => GetDeepLLanguageCode(l))
                     .ToDictionary(g => g.Key, g => g.ToList());
+
+                string context = includeContextInTranslation ? translationData.Metadata.GetTranslationContext(key) : "";
 
                 foreach (var group in languageGroups)
                 {
@@ -378,22 +478,17 @@ namespace PSS
                                 }
                             }
                         }
-
-                        lock (progressLock)
-                        {
-                            completedLanguages += targetLanguages.Count;
-                        }
                     });
                     tasks.Add(task);
                 }
 
                 await Task.WhenAll(tasks);
                 EditorApplication.delayCall += () => AssetDatabase.SaveAssets();
-                Debug.Log($"Completed all translations for key: {key}");
+                AddDeepLLog($"✓ All translations completed for '{key}'");
             }
             catch (System.Exception e)
             {
-                Debug.LogError($"Error during translation: {e.Message}");
+                AddDeepLLog($"Error during translation: {e.Message}", LogType.Error);
             }
         }
 
@@ -401,15 +496,10 @@ namespace PSS
         {
             if (string.IsNullOrEmpty(deeplApiKey) || translationData == null) return;
 
-            // Only get context if the includeContextInTranslation flag is true
-            string context = includeContextInTranslation ? translationData.Metadata.GetTranslationContext(key) : "";
-            Debug.Log($"Context for key '{key}': {context}");
-
             int keyIndex = translationData.allKeys.IndexOf(key);
-            
             if (keyIndex == -1) return;
 
-            Debug.Log($"Analyzing missing translations for key: {key}");
+            AddDeepLLog($"Checking missing translations for '{key}'");
             
             try
             {
@@ -430,18 +520,17 @@ namespace PSS
                             string.IsNullOrWhiteSpace(languageData.allText[keyIndex]))
                         {
                             languagesToTranslate.Add((language, languageData));
-                            Debug.Log($"Found missing translation for {language}");
                         }
                     }
                 }
 
                 if (languagesToTranslate.Count == 0)
                 {
-                    Debug.Log("No missing translations found.");
+                    AddDeepLLog("✓ No missing translations found");
                     return;
                 }
 
-                Debug.Log($"Found {languagesToTranslate.Count} languages needing translation");
+                AddDeepLLog($"Found {languagesToTranslate.Count} missing translations");
 
                 // Group languages by their DeepL codes to optimize batch translations
                 var languageGroups = languagesToTranslate
@@ -449,8 +538,8 @@ namespace PSS
                     .ToDictionary(g => g.Key, g => g.ToList());
 
                 var tasks = new List<Task>();
-                var progressLock = new object();
-                int completedLanguages = 0;
+                int totalLanguages = languagesToTranslate.Count;
+                string context = includeContextInTranslation ? translationData.Metadata.GetTranslationContext(key) : "";
 
                 foreach (var group in languageGroups)
                 {
@@ -480,22 +569,17 @@ namespace PSS
                                 };
                             }
                         }
-
-                        lock (progressLock)
-                        {
-                            completedLanguages += targetLanguages.Count;
-                        }
                     });
                     tasks.Add(task);
                 }
 
                 await Task.WhenAll(tasks);
                 EditorApplication.delayCall += () => AssetDatabase.SaveAssets();
-                Debug.Log($"Completed all missing translations for key: {key}");
+                AddDeepLLog($"✓ All missing translations completed for '{key}'");
             }
             catch (System.Exception e)
             {
-                Debug.LogError($"Error during translation: {e.Message}");
+                AddDeepLLog($"Error during translation: {e.Message}", LogType.Error);
             }
         }
 
@@ -503,9 +587,8 @@ namespace PSS
         {
             if (string.IsNullOrEmpty(deeplApiKey)) return;
 
-            // Get the context if includeContextInTranslation is enabled
+            AddDeepLLog($"Translating '{key}' to {targetLanguage}...");
             string context = includeContextInTranslation ? translationData.Metadata.GetTranslationContext(key) : "";
-            Debug.Log($"Single field translation - Context for key '{key}': {context}");
 
             var result = await TranslateBatch(
                 new List<string> { key },
@@ -520,6 +603,7 @@ namespace PSS
                 EditorUtility.SetDirty(languageData);
                 isDirty = true;
                 lastEditTime = EditorApplication.timeSinceStartup;
+                AddDeepLLog($"✓ Translation completed for '{key}' to {targetLanguage}");
             }
         }
 
@@ -581,8 +665,27 @@ namespace PSS
                     return baseCode;
             }
 
-            Debug.LogError($"Language '{language}' not found in DeepL mappings. Please set up a custom mapping in the DeepL tab of the Translations window.");
+            AddDeepLLog($"Language '{language}' not found in DeepL mappings. Please set up a custom mapping in the DeepL tab of the Translations window.", LogType.Error);
             return null; // Return null instead of a fallback to prevent API errors
+        }
+
+        private static class UnityThread
+        {
+            private static int mainThreadId;
+            private static bool initialized;
+
+            public static bool isMainThread
+            {
+                get
+                {
+                    if (!initialized)
+                    {
+                        mainThreadId = System.Threading.Thread.CurrentThread.ManagedThreadId;
+                        initialized = true;
+                    }
+                    return System.Threading.Thread.CurrentThread.ManagedThreadId == mainThreadId;
+                }
+            }
         }
     }
 } 

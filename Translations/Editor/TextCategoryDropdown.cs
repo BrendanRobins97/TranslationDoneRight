@@ -13,6 +13,8 @@ namespace PSS
 
         private static Dictionary<int, Dictionary<int, bool>> isEditingStatesDictionary = new Dictionary<int, Dictionary<int, bool>>();
         private static Dictionary<int, Dictionary<int, string>> editingValuesDictionary = new Dictionary<int, Dictionary<int, string>>();
+
+        private static Dictionary<int, Dictionary<int, bool>> isAddingStatesDictionary = new Dictionary<int, Dictionary<int, bool>>();
         
         private Dictionary<int, string> editingValues {
             get {
@@ -29,6 +31,15 @@ namespace PSS
                     isEditingStatesDictionary[guid] = new Dictionary<int, bool>();
                 }
                 return isEditingStatesDictionary[guid];
+            }
+        }
+
+        private Dictionary<int, bool> isAddingStates {
+            get {
+                if (!isAddingStatesDictionary.ContainsKey(guid)) {
+                    isAddingStatesDictionary[guid] = new Dictionary<int, bool>();
+                }
+                return isAddingStatesDictionary[guid];
             }
         }
 
@@ -94,14 +105,14 @@ namespace PSS
                         categories.Add(editingValue);
                         EditorUtility.SetDirty(target);
                     }
-
-                    if (isEditingStates[sourceId])
-                    {
-                        onEditted?.Invoke(editingValue);
-                    }
                 }
                 
+                if (!isAddingStates[sourceId] && isEditingStates[sourceId])
+                {
+                    onEditted?.Invoke(editingValue);
+                }
                 isEditingStates[sourceId] = false;
+                isAddingStates[sourceId] = false;
                 GUI.FocusControl(null);
                 EditorGUI.FocusTextInControl(null);
             }
@@ -147,6 +158,7 @@ namespace PSS
             {
                 isEditingStates[sourceId] = true;
                 editingValues[sourceId] = textCategory;
+                isAddingStates[sourceId] = true;
                 EditorUtility.SetDirty(target);
             }
             else if (selectedIndex > 1) // Existing category selected

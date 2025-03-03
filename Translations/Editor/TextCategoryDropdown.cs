@@ -55,6 +55,10 @@ namespace PSS
                 isEditingStates[sourceId] = false;
                 editingValues[sourceId] = textCategory;
             }
+            if (!isAddingStates.ContainsKey(sourceId))
+            {
+                isAddingStates[sourceId] = false;
+            }
 
             isEditing = isEditingStates[sourceId];
             editingValue = editingValues[sourceId];

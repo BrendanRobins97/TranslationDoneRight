@@ -1168,24 +1168,49 @@ namespace PSS
         {
             if (selectedKeys.Count == 0) return;
 
-            EditorGUILayout.LabelField($"Translations for: {string.Join(", ", selectedKeys)}", EditorStyles.boldLabel);
+            // Multi-selection header with count
+            EditorGUILayout.LabelField(selectedKeys.Count > 1 
+                ? $"Editing {selectedKeys.Count} translations" 
+                : $"Translations for: {selectedKeys.First()}", 
+                EditorStyles.boldLabel);
+                
             EditorGUILayout.Space(5);
 
-            // Get the index of the selected key
-            int keyIndex = translationData.allKeys.IndexOf(selectedKeys.First());
-            if (keyIndex == -1)
+            // Display the base keys
+            if (selectedKeys.Count == 1)
             {
-                EditorGUILayout.HelpBox("Selected key not found in translation data.", MessageType.Error);
-                return;
+                // Single selection - show the key normally
+                int keyIndex = translationData.allKeys.IndexOf(selectedKeys.First());
+                if (keyIndex == -1)
+                {
+                    EditorGUILayout.HelpBox("Selected key not found in translation data.", MessageType.Error);
+                    return;
+                }
+                
+                // Show default language text
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.LabelField(translationData.defaultLanguage, GUILayout.Width(150));
+                GUI.enabled = false;
+                EditorGUILayout.TextField(selectedKeys.First());
+                GUI.enabled = true;
+                EditorGUILayout.EndHorizontal();
             }
-            
-            // Show default language text first
-            EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField(translationData.defaultLanguage, GUILayout.Width(150));
-            GUI.enabled = false;
-            EditorGUILayout.TextField(selectedKeys.First());
-            GUI.enabled = true;
-            EditorGUILayout.EndHorizontal();
+            else
+            {
+                // Multi-selection - show count and first few keys
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.LabelField(translationData.defaultLanguage, GUILayout.Width(150));
+                GUI.enabled = false;
+                var previewKeys = selectedKeys.Take(3).ToList();
+                string keysPreview = string.Join(", ", previewKeys);
+                if (selectedKeys.Count > 3)
+                {
+                    keysPreview += $"... (+{selectedKeys.Count - 3} more)";
+                }
+                EditorGUILayout.TextField(keysPreview);
+                GUI.enabled = true;
+                EditorGUILayout.EndHorizontal();
+            }
 
             EditorGUILayout.Space(10);
 
@@ -1303,265 +1328,359 @@ namespace PSS
 
                 // Source Information
                 EditorGUILayout.LabelField("Source Information", EditorStyles.boldLabel);
-                var sources = translationData.Metadata.GetSources(selectedKeys.First());
-                if (sources.Count > 0)
+                
+                if (selectedKeys.Count == 1)
                 {
-                    foreach (var source in sources)
+                    var sources = translationData.Metadata.GetSources(selectedKeys.First());
+                    if (sources.Count > 0)
                     {
-                        // Source type with icon and path
-                        string iconName = source.sourceType switch
+                        foreach (var source in sources)
                         {
-                            TextSourceType.Scene => "SceneAsset Icon",
-                            TextSourceType.Prefab => "Prefab Icon",
-                            TextSourceType.Script => "cs Script Icon",
-                            TextSourceType.ScriptableObject => "ScriptableObject Icon",
-                            TextSourceType.ExternalFile => "TextAsset Icon",
-                            _ => "TextAsset Icon"
-                        };
-
-                        using (new EditorGUILayout.HorizontalScope())
-                        {
-                            // Icon and type
-                            GUILayout.Label(EditorGUIUtility.IconContent(iconName), GUILayout.Width(20), GUILayout.Height(18));
-                            EditorGUILayout.LabelField($"{source.sourceType}", EditorStyles.boldLabel);
-                        }
-
-                        EditorGUI.indentLevel++;
-
-                        // Source path (clickable if asset exists)
-                        using (new EditorGUILayout.HorizontalScope())
-                        {
-                            EditorGUILayout.PrefixLabel("Source");
-                            if (GUILayout.Button(source.sourcePath, EditorStyles.linkLabel))
+                            // Source type with icon and path
+                            string iconName = source.sourceType switch
                             {
-                                var asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(source.sourcePath);
-                                if (asset != null)
-                                {
-                                    Selection.activeObject = asset;
-                                    EditorGUIUtility.PingObject(asset);
-                                }
-                            }
-                        }
+                                TextSourceType.Scene => "SceneAsset Icon",
+                                TextSourceType.Prefab => "Prefab Icon",
+                                TextSourceType.Script => "cs Script Icon",
+                                TextSourceType.ScriptableObject => "ScriptableObject Icon",
+                                TextSourceType.ExternalFile => "TextAsset Icon",
+                                _ => "TextAsset Icon"
+                            };
 
-                        // Object path if it exists
-                        if (!string.IsNullOrEmpty(source.objectPath))
-                        {
                             using (new EditorGUILayout.HorizontalScope())
                             {
-                                EditorGUILayout.PrefixLabel("Object Path");
-                                EditorGUILayout.LabelField(source.objectPath);
+                                // Icon and type
+                                GUILayout.Label(EditorGUIUtility.IconContent(iconName), GUILayout.Width(20), GUILayout.Height(18));
+                                EditorGUILayout.LabelField($"{source.sourceType}", EditorStyles.boldLabel);
                             }
-                        }
 
-                        // Component and field info
-                        using (new EditorGUILayout.HorizontalScope())
-                        {
-                            EditorGUILayout.PrefixLabel("Component");
-                            EditorGUILayout.LabelField(source.componentName);
-                        }
-                        using (new EditorGUILayout.HorizontalScope())
-                        {
-                            EditorGUILayout.PrefixLabel("Field");
-                            EditorGUILayout.LabelField(source.fieldName);
-                        }
+                            EditorGUI.indentLevel++;
 
-                        // Inactive state if relevant
-                        if (source.wasInactive)
-                        {
-                            EditorGUILayout.LabelField("State: Inactive", EditorGUIStyleUtility.WarningLabelStyle);
-                        }
+                            // Source path (clickable if asset exists)
+                            using (new EditorGUILayout.HorizontalScope())
+                            {
+                                EditorGUILayout.PrefixLabel("Source");
+                                if (GUILayout.Button(source.sourcePath, EditorStyles.linkLabel))
+                                {
+                                    var asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(source.sourcePath);
+                                    if (asset != null)
+                                    {
+                                        Selection.activeObject = asset;
+                                        EditorGUIUtility.PingObject(asset);
+                                    }
+                                }
+                            }
 
-                        EditorGUI.indentLevel--;
-                        EditorGUILayout.Space(5);
+                            // If we have component info, show it
+                            if (!string.IsNullOrEmpty(source.componentName))
+                            {
+                                EditorGUILayout.LabelField("Component", source.componentName);
+                            }
+
+                            // If we have field info, show it
+                            if (!string.IsNullOrEmpty(source.fieldName))
+                            {
+                                EditorGUILayout.LabelField("Field", source.fieldName);
+                            }
+
+                            // If we have hierarchy path info, show it
+                            if (!string.IsNullOrEmpty(source.objectPath))
+                            {
+                                EditorGUILayout.LabelField("Path", source.objectPath);
+                            }
+
+                            // Was the game object inactive when extracted?
+                            if (source.wasInactive)
+                            {
+                                EditorGUILayout.LabelField("State", "Inactive when extracted", EditorStyles.boldLabel);
+                            }
+
+                            EditorGUI.indentLevel--;
+                            EditorGUILayout.Space(5);
+                        }
+                    }
+                    else
+                    {
+                        EditorGUILayout.HelpBox("No source information available for this text.", MessageType.Info);
                     }
                 }
                 else
                 {
-                    EditorGUILayout.HelpBox("No source information available for this key.", MessageType.Info);
+                    // Multi-selection - show common sources info
+                    int keysWithSources = 0;
+                    int totalSources = 0;
+                    
+                    foreach (var key in selectedKeys)
+                    {
+                        var sources = translationData.Metadata.GetSources(key);
+                        if (sources.Count > 0)
+                        {
+                            keysWithSources++;
+                            totalSources += sources.Count;
+                        }
+                    }
+                    
+                    if (keysWithSources > 0)
+                    {
+                        EditorGUILayout.HelpBox(
+                            $"{keysWithSources} of {selectedKeys.Count} selected keys have source information ({totalSources} total sources).\n" +
+                            "Select a single key to view detailed source information.", 
+                            MessageType.Info
+                        );
+                    }
+                    else
+                    {
+                        EditorGUILayout.HelpBox("None of the selected keys have source information.", MessageType.Info);
+                    }
                 }
 
                 EditorGUILayout.Space(10);
 
-                // Context Information with help icon
-                using (new EditorGUILayout.HorizontalScope())
+                // Context Information
+                if (showSourceInformation)
                 {
-                    var contextHelpContent = EditorGUIUtility.IconContent("_Help");
-                    contextHelpContent.tooltip = "Context System Help:\n\n" +
-                        "The context system helps translators understand how and where text is used:\n\n" +
-                        "• Categories save time by providing preset contexts for common text types\n" +
-                        "• Perfect for repetitive fields like Locations, Item Types, or UI Elements\n" +
-                        "• Manual context can be added for unique or special cases\n" +
-                        "• All context is sent to DeepL to improve translation accuracy\n\n" +
-                        "Example:\n" +
-                        "When translating 'Start', the context helps DeepL understand if it's:\n" +
-                        "- A button label in the UI\n" +
-                        "- A verb in dialog\n" +
-                        "- Part of a tutorial\n\n" +
-                        "This context ensures more accurate translations across languages.";
-                    GUILayout.Label(contextHelpContent, EditorStyles.label, GUILayout.Width(20));
-                    GUILayout.Space(-3);
-                    EditorGUILayout.LabelField("Context Information", EditorStyles.boldLabel);
-                }
-                var context = translationData.Metadata.GetContext(selectedKeys.First());
-
-                // Context categories
-                foreach (string key in translationData.Metadata.TextCategories.Keys)
-                {
-                    if (!context.ContainsKey(key))
+                    EditorGUILayout.Space(10);
+                    using (new EditorGUILayout.HorizontalScope())
                     {
-                        context[key] = "";
+                        var contextHelpContent = EditorGUIUtility.IconContent("_Help");
+                        contextHelpContent.tooltip = "Context System Help:\n\n" +
+                            "The context system helps translators understand how and where text is used:\n\n" +
+                            "• Categories save time by providing preset contexts for common text types\n" +
+                            "• Perfect for repetitive fields like Locations, Item Types, or UI Elements\n" +
+                            "• Manual context can be added for unique or special cases\n" +
+                            "• All context is sent to DeepL to improve translation accuracy\n\n" +
+                            "Example:\n" +
+                            "When translating 'Start', the context helps DeepL understand if it's:\n" +
+                            "- A button label in the UI\n" +
+                            "- A verb in dialog\n" +
+                            "- Part of a tutorial\n\n" +
+                            "This context ensures more accurate translations across languages.";
+                        GUILayout.Label(contextHelpContent, EditorStyles.label, GUILayout.Width(20));
+                        GUILayout.Space(-3);
+                        EditorGUILayout.LabelField("Context Information", EditorStyles.boldLabel);
                     }
-                    string oldCategory = context[key];
-                    var categoryDropdown = new TextCategoryDropdown();
-                    if (!translationData.Metadata.TextCategories.ContainsKey(key))
+                    
+                    // Use the first selected key as the reference for UI (but apply changes to all)
+                    string referenceKey = selectedKeys.First();
+                    var context = translationData.Metadata.GetContext(referenceKey);
+                    
+                    // Context categories
+                    foreach (string key in translationData.Metadata.TextCategories.Keys)
                     {
-                        translationData.Metadata.TextCategories[key] = new List<string>();
-                    }
-                    string newValue = categoryDropdown.Draw(key, selectedKeys.First().GetHashCode(), context[key], translationData.Metadata.TextCategories[key], translationData, (newCategory) => {
+                        if (!context.ContainsKey(key))
+                        {
+                            context[key] = "";
+                        }
+                        string oldCategory = context[key];
+                        // Check if all selected items have the same value
+                        bool hasSameValue = AllSelectedKeysHaveSameContextValue(key, out string commonValue);
+                        string displayValue1 = hasSameValue ? commonValue : "—";
+                         var categoryDropdown = new TextCategoryDropdown();
+                        if (!translationData.Metadata.TextCategories.ContainsKey(key))
+                        {
+                            translationData.Metadata.TextCategories[key] = new List<string>();
+                        }
+                        string newValue = categoryDropdown.Draw(key, selectedKeys.First().GetHashCode(), context[key], translationData.Metadata.TextCategories[key], translationData, (newCategory) => {
                         if (newCategory != oldCategory)
                         {
                             translationData.Metadata.UpdateTextCategory(key, oldCategory, newCategory);
                         }
-                    });
-                    
-                    if (newValue != oldCategory)
-                    {
-                        translationData.Metadata.UpdateContext(selectedKeys.First(), key, newValue);
-                        EditorUtility.SetDirty(translationData);
-                    }
-                }
+                        });
 
-                // Category management section
-                EditorGUILayout.Space(5);
-                using (new EditorGUILayout.HorizontalScope())
-                {
-                    var categoryHelpContent = EditorGUIUtility.IconContent("_Help");
-                    categoryHelpContent.tooltip = "Category Management Help:\n\n" +
-                        "Categories provide quick context templates for common text types:\n\n" +
-                        "• Locations: 'Main Menu', 'Settings Screen', 'Inventory Panel'\n" +
-                        "• Item Types: 'Weapon', 'Consumable', 'Quest Item'\n" +
-                        "• Dialog Types: 'NPC Greeting', 'Quest Dialog', 'Tutorial Tip'\n" +
-                        "• UI Elements: 'Button', 'Label', 'Tooltip'\n\n" +
-                        "Instead of typing context manually each time, just select a category\n" +
-                        "and choose from predefined values. The system automatically generates\n" +
-                        "natural-sounding context using your format template.";
-                    GUILayout.Label(categoryHelpContent, EditorStyles.label, GUILayout.Width(20));
-                    GUILayout.Space(-3);
-                    showCategoryManagement = EditorGUILayout.Foldout(showCategoryManagement, "Category Management", true);
-                }
-                if (showCategoryManagement)
-                {
-                    EditorGUI.indentLevel++;
-                    
-                    // Add new category
-                    using (new EditorGUILayout.HorizontalScope())
-                    {
-                        EditorGUILayout.PrefixLabel("Add New Category");
-                        newCategoryName = EditorGUILayout.TextField(newCategoryName);
-                        if (GUILayout.Button("Add", GUILayout.Width(60)) && !string.IsNullOrWhiteSpace(newCategoryName))
+                        if (newValue != oldCategory)
                         {
-                            if (!translationData.Metadata.TextCategories.ContainsKey(newCategoryName))
+                            translationData.Metadata.UpdateContext(selectedKeys.First(), key, newValue);
+                            foreach (var selectedKey in selectedKeys)
                             {
-                                translationData.Metadata.AddCategory(newCategoryName, new CategoryTemplate { 
-                                    format = "This text appears in {value}" 
-                                });
-                                newCategoryName = "";
-                                GUI.FocusControl(null);
-                                EditorUtility.SetDirty(translationData);
+                                translationData.Metadata.UpdateContext(selectedKey, key, newValue);
                             }
+                            EditorUtility.SetDirty(translationData);
                         }
                     }
 
-                    // Remove categories and edit formats
+                    // Category management section
                     EditorGUILayout.Space(5);
-                    EditorGUILayout.LabelField("Manage Categories:", EditorStyles.boldLabel);
-                    List<string> categoriesToRemove = new List<string>();
-
-                    foreach (var category in translationData.Metadata.TextCategories.Keys)
+                    using (new EditorGUILayout.HorizontalScope())
                     {
-                        EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+                        var categoryHelpContent = EditorGUIUtility.IconContent("_Help");
+                        categoryHelpContent.tooltip = "Category Management Help:\n\n" +
+                            "Categories provide quick context templates for common text types:\n\n" +
+                            "• Locations: 'Main Menu', 'Settings Screen', 'Inventory Panel'\n" +
+                            "• Item Types: 'Weapon', 'Consumable', 'Quest Item'\n" +
+                            "• Dialog Types: 'NPC Greeting', 'Quest Dialog', 'Tutorial Tip'\n" +
+                            "• UI Elements: 'Button', 'Label', 'Tooltip'\n\n" +
+                            "Instead of typing context manually each time, just select a category\n" +
+                            "and choose from predefined values. The system automatically generates\n" +
+                            "natural-sounding context using your format template.";
+                        GUILayout.Label(categoryHelpContent, EditorStyles.label, GUILayout.Width(20));
+                        GUILayout.Space(-3);
+                        showCategoryManagement = EditorGUILayout.Foldout(showCategoryManagement, "Category Management", true);
+                    }
+                    if (showCategoryManagement)
+                    {
+                        EditorGUI.indentLevel++;
                         
-                        // Category name and remove button
+                        // Add new category
                         using (new EditorGUILayout.HorizontalScope())
                         {
-                            EditorGUILayout.LabelField(category, EditorStyles.boldLabel);
-                            if (GUILayout.Button("Remove", GUILayout.Width(60)))
+                            EditorGUILayout.PrefixLabel("Add New Category");
+                            newCategoryName = EditorGUILayout.TextField(newCategoryName);
+                            if (GUILayout.Button("Add", GUILayout.Width(60)) && !string.IsNullOrWhiteSpace(newCategoryName))
                             {
-                                if (EditorUtility.DisplayDialog("Remove Category",
-                                    $"Are you sure you want to remove the category '{category}'?", "Remove", "Cancel"))
+                                if (!translationData.Metadata.TextCategories.ContainsKey(newCategoryName))
                                 {
-                                    categoriesToRemove.Add(category);
+                                    translationData.Metadata.AddCategory(newCategoryName, new CategoryTemplate { 
+                                        format = "This text appears in {value}" 
+                                    });
+                                    newCategoryName = "";
+                                    GUI.FocusControl(null);
+                                    EditorUtility.SetDirty(translationData);
                                 }
                             }
                         }
 
-                        // Format editor
-                        if (translationData.Metadata.CategoryTemplates.TryGetValue(category, out var template))
+                        // Remove categories and edit formats
+                        EditorGUILayout.Space(5);
+                        EditorGUILayout.LabelField("Manage Categories:", EditorStyles.boldLabel);
+                        List<string> categoriesToRemove = new List<string>();
+
+                        foreach (var category in translationData.Metadata.TextCategories.Keys)
                         {
-                            EditorGUI.BeginChangeCheck();
+                            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
                             
-                            // Format template label with help icon
+                            // Category name and remove button
                             using (new EditorGUILayout.HorizontalScope())
                             {
-                                var helpContent = EditorGUIUtility.IconContent("_Help");
-                                helpContent.tooltip = "Format Template Help:\n" +
-                                    "• Use {value} where you want the actual value to appear\n" +
-                                    "• The text will automatically end with a period\n" +
-                                    "• Example: 'This text appears in {value}' becomes 'This text appears in Main Menu.'\n" +
-                                    "• Keep it natural and descriptive to help translators understand the context";
-                                GUILayout.Label(helpContent, EditorStyles.label, GUILayout.Width(20));
-                                GUILayout.Space(-3);
-                                EditorGUILayout.LabelField("Format Template:", EditorStyles.miniLabel);
+                                EditorGUILayout.LabelField(category, EditorStyles.boldLabel);
+                                if (GUILayout.Button("Remove", GUILayout.Width(60)))
+                                {
+                                    if (EditorUtility.DisplayDialog("Remove Category",
+                                        $"Are you sure you want to remove the category '{category}'?", "Remove", "Cancel"))
+                                    {
+                                        categoriesToRemove.Add(category);
+                                    }
+                                }
                             }
                             
-                            string newFormat = EditorGUILayout.TextField(template.format);
-                            
-                            if (EditorGUI.EndChangeCheck())
+                            // Format editor
+                            if (translationData.Metadata.CategoryTemplates.TryGetValue(category, out var template))
                             {
-                                template.format = newFormat;
-                                translationData.Metadata.UpdateCategoryTemplate(category, template);
-                                EditorUtility.SetDirty(translationData);
+                                EditorGUI.BeginChangeCheck();
+                                
+                                // Format template label with help icon
+                                using (new EditorGUILayout.HorizontalScope())
+                                {
+                                    var helpContent = EditorGUIUtility.IconContent("_Help");
+                                    helpContent.tooltip = "Format Template Help:\n" +
+                                        "• Use {value} where you want the actual value to appear\n" +
+                                        "• The text will automatically end with a period\n" +
+                                        "• Example: 'This text appears in {value}' becomes 'This text appears in Main Menu.'\n" +
+                                        "• Keep it natural and descriptive to help translators understand the context";
+                                    GUILayout.Label(helpContent, EditorStyles.label, GUILayout.Width(20));
+                                    GUILayout.Space(-3);
+                                    EditorGUILayout.LabelField("Format Template:", EditorStyles.miniLabel);
+                                }
+                                
+                                string newFormat = EditorGUILayout.TextField(template.format);
+                                
+                                if (EditorGUI.EndChangeCheck())
+                                {
+                                    template.format = newFormat;
+                                    translationData.Metadata.UpdateCategoryTemplate(category, template);
+                                    EditorUtility.SetDirty(translationData);
+                                }
                             }
+
+                            EditorGUILayout.EndVertical();
+                            EditorGUILayout.Space(5);
                         }
 
-                        EditorGUILayout.EndVertical();
-                        EditorGUILayout.Space(5);
+                        // Process removals after the loop
+                        foreach (var category in categoriesToRemove)
+                        {
+                            translationData.Metadata.TextCategories.Remove(category);
+                            translationData.Metadata.CategoryTemplates.Remove(category);
+                            
+                            // Apply to all selected keys
+                            foreach (var selectedKey in selectedKeys)
+                            {
+                                var keyContext = translationData.Metadata.GetContext(selectedKey);
+                                keyContext.Remove(category);
+                                translationData.Metadata.SetContext(selectedKey, keyContext);
+                            }
+                            
+                            EditorUtility.SetDirty(translationData);
+                        }
+
+                        EditorGUI.indentLevel--;
                     }
 
-                    // Process removals after the loop
-                    foreach (var category in categoriesToRemove)
+                    // Main context field - Additional Context
+                    EditorGUILayout.LabelField("Additional Context:");
+                    
+                    // Check if all have the same manual context
+                    bool hasSameManualContext = AllSelectedKeysHaveSameContextValue("Manual", out string commonManualContext);
+                    
+                    EditorGUI.BeginChangeCheck();
+                    string displayValue = hasSameManualContext ? commonManualContext : "";
+                    
+                    // Create style for mixed values text area
+                    GUIStyle mixedTextAreaStyle = new GUIStyle(EditorStyles.textArea);
+                    if (!hasSameManualContext && selectedKeys.Count > 1)
                     {
-                        translationData.Metadata.TextCategories.Remove(category);
-                        translationData.Metadata.CategoryTemplates.Remove(category);
-                        context.Remove(category);
-                        translationData.Metadata.SetContext(selectedKeys.First(), context);
+                        GUI.enabled = false;
+                        displayValue = "(Multiple different values)";
+                        mixedTextAreaStyle.fontStyle = FontStyle.Italic;
+                        mixedTextAreaStyle.normal.textColor = Color.gray;
+                    }
+                    
+                    string newManualContext = EditorGUILayout.TextArea(
+                        displayValue,
+                        mixedTextAreaStyle,
+                        GUILayout.Height(60)
+                    );
+                    
+                    if (!hasSameManualContext && selectedKeys.Count > 1)
+                    {
+                        GUI.enabled = true;
+                    }
+                    
+                    if (EditorGUI.EndChangeCheck() && (hasSameManualContext || selectedKeys.Count == 1))
+                    {
+                        // Apply to all selected keys
+                        foreach (var selectedKey in selectedKeys)
+                        {
+                            translationData.Metadata.UpdateContext(selectedKey, "Manual", newManualContext);
+                        }
                         EditorUtility.SetDirty(translationData);
                     }
 
-                    EditorGUI.indentLevel--;
-                }
-
-                // Main context field
-                EditorGUILayout.LabelField("Additional Context:");
-                string newManualContext = EditorGUILayout.TextArea(
-                    context.ContainsKey("Manual") ? context["Manual"] : "", 
-                    GUILayout.Height(60)
-                );
-                if (newManualContext != (context.ContainsKey("Manual") ? context["Manual"] : ""))
-                {
-                    translationData.Metadata.UpdateContext(selectedKeys.First(), "Manual", newManualContext);
-                    EditorUtility.SetDirty(translationData);
-                }
-
-                // Show auto-generated context
-                string translationContext = translationData.Metadata.GetTranslationContext(selectedKeys.First());
-                if (!string.IsNullOrEmpty(translationContext))
-                {
-                    EditorGUILayout.Space(5);
-                    EditorGUILayout.LabelField("Combined Context:", EditorStyles.boldLabel);
-                    EditorGUI.BeginDisabledGroup(true);
-                    EditorGUILayout.TextArea(translationContext, GUILayout.Height(40));
-                    EditorGUI.EndDisabledGroup();
+                    // Show auto-generated context preview for single selection
+                    if (selectedKeys.Count == 1)
+                    {
+                        string translationContext = translationData.Metadata.GetTranslationContext(selectedKeys.First());
+                        if (!string.IsNullOrEmpty(translationContext))
+                        {
+                            EditorGUILayout.Space(5);
+                            EditorGUILayout.LabelField("Combined Context:", EditorStyles.boldLabel);
+                            EditorGUI.BeginDisabledGroup(true);
+                            EditorGUILayout.TextArea(translationContext, GUILayout.Height(40));
+                            EditorGUI.EndDisabledGroup();
+                        }
+                    }
+                    else if (hasSameManualContext)
+                    {
+                        // For multi-selection with the same context values, show a preview based on the first key
+                        string translationContext = translationData.Metadata.GetTranslationContext(selectedKeys.First());
+                        if (!string.IsNullOrEmpty(translationContext))
+                        {
+                            EditorGUILayout.Space(5);
+                            EditorGUILayout.LabelField("Combined Context (Preview):", EditorStyles.boldLabel);
+                            EditorGUI.BeginDisabledGroup(true);
+                            EditorGUILayout.TextArea(translationContext + "\n\n(This preview is based on the first selected key)", GUILayout.Height(60));
+                            EditorGUI.EndDisabledGroup();
+                        }
+                    }
                 }
 
                 EditorGUI.indentLevel--;
@@ -1575,85 +1694,107 @@ namespace PSS
             for (int i = 0; i < translationData.supportedLanguages.Count - 1; i++)
             {
                 string language = translationData.supportedLanguages[i + 1]; // +1 to skip default language
-                var assetRef = translationData.languageDataDictionary[i];
                 
-                string assetPath = AssetDatabase.GUIDToAssetPath(assetRef.AssetGUID);
-                LanguageData languageData = AssetDatabase.LoadAssetAtPath<LanguageData>(assetPath);
-                if (languageData != null && keyIndex < languageData.allText.Count)
+                // Check if all selected keys have the same translation for this language
+                bool hasSameTranslation = AllSelectedKeysHaveSameTranslation(language, i, out string commonTranslation);
+                
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.LabelField(language, GUILayout.Width(150));
+
+                EditorGUI.BeginChangeCheck();
+                
+                // Create style for mixed values
+                GUIStyle mixedTextAreaStyle = new GUIStyle(EditorStyles.textArea);
+                string displayValue = commonTranslation;
+                
+                if (!hasSameTranslation && selectedKeys.Count > 1)
                 {
-                    EditorGUILayout.BeginHorizontal();
-                    EditorGUILayout.LabelField(language, GUILayout.Width(150));
+                    GUI.enabled = false;
+                    displayValue = "(Multiple different values)";
+                    mixedTextAreaStyle.fontStyle = FontStyle.Italic;
+                    mixedTextAreaStyle.normal.textColor = Color.gray;
+                }
 
-                    var translationEntry = languageData.allText[keyIndex];
-                    EditorGUI.BeginChangeCheck();
+                // Create a unique control name for this text area
+                string controlName = $"TranslationField_{language}_{string.Join("_", selectedKeys).GetHashCode()}";
+                GUI.SetNextControlName(controlName);
 
-                    // Handle mouse down outside of text area to clear focus
-                    if (Event.current.type == EventType.MouseDown)
+                string newTranslation = EditorGUIStyleUtility.DrawExpandingTextArea(
+                    displayValue,
+                    EditorGUIUtility.currentViewWidth
+                );
+                
+                if (!hasSameTranslation && selectedKeys.Count > 1)
+                {
+                    GUI.enabled = true;
+                }
+
+                if (EditorGUI.EndChangeCheck() && (hasSameTranslation || selectedKeys.Count == 1))
+                {
+                    // Apply the change to all selected keys
+                    foreach (var key in selectedKeys)
                     {
-                        Rect lastRect = GUILayoutUtility.GetLastRect();
-                        if (!lastRect.Contains(Event.current.mousePosition))
+                        int keyIndex = translationData.allKeys.IndexOf(key);
+                        if (keyIndex < 0) continue;
+                        
+                        var assetRef = translationData.languageDataDictionary[i];
+                        string assetPath = AssetDatabase.GUIDToAssetPath(assetRef.AssetGUID);
+                        LanguageData languageData = AssetDatabase.LoadAssetAtPath<LanguageData>(assetPath);
+                        
+                        if (languageData != null && keyIndex < languageData.allText.Count)
                         {
-                            GUI.FocusControl(null);
+                            Undo.RecordObject(languageData, "Update Translation");
+                            languageData.allText[keyIndex] = newTranslation;
+                            EditorUtility.SetDirty(languageData);
                         }
                     }
+                }
 
-                    // Create a unique control name for this text area
-                    string controlName = $"TranslationField_{language}_{keyIndex}";
-                    GUI.SetNextControlName(controlName);
-
-                    string newTranslation = EditorGUIStyleUtility.DrawExpandingTextArea(
-                        translationEntry,
-                        EditorGUIUtility.currentViewWidth
-                    );
-
-                    if (EditorGUI.EndChangeCheck())
+                // Create tooltip content showing what will be sent to DeepL
+                string tooltipContent = "";
+                if (!string.IsNullOrEmpty(deeplApiKey))
+                {
+                    string textToTranslate = selectedKeys.Count == 1 ? selectedKeys.First() : 
+                        $"{selectedKeys.Count} selected texts";
+                    
+                    string context = "";
+                    if (includeContextInTranslation && selectedKeys.Count == 1)
                     {
-                        Undo.RecordObject(languageData, "Update Translation");
-                        languageData.allText[keyIndex] = newTranslation;
-                        EditorUtility.SetDirty(languageData);
+                        context = translationData.Metadata.GetTranslationContext(selectedKeys.First());
                     }
-
-                    // Create tooltip content showing what will be sent to DeepL
-                    string tooltipContent = "";
-                    if (!string.IsNullOrEmpty(deeplApiKey))
-                    {
-                        string textToTranslate = selectedKeys.First();
-                        string context = includeContextInTranslation ? translationData.Metadata.GetTranslationContext(textToTranslate) : "";
-                        tooltipContent = "DeepL Query Preview:\n\n" +
-                            $"Text: \"{textToTranslate}\"\n" +
-                            $"Target Language: {language}\n" +
-                            (includeContextInTranslation ? $"Context: \"{context}\"\n" : "No context will be sent\n") +
-                            $"Formality: {(formalityPreference ? "More formal" : "Less formal")}\n" +
-                            $"Preserve Formatting: {(preserveFormatting ? "Yes" : "No")}";
-                    }
-                    else
-                    {
-                        tooltipContent = "DeepL API key not configured";
-                    }
-
-                    // Create button content with tooltip
-                    var buttonContent = new GUIContent("Auto", tooltipContent);
-                    if (GUILayout.Button(buttonContent, GUILayout.Width(50)))
-                    {
-                        if (!string.IsNullOrEmpty(deeplApiKey))
-                        {
-                            TranslateSingleField(selectedKeys.First(), language, keyIndex, languageData);
-                        }
-                        else
-                        {
-                            EditorUtility.DisplayDialog("DeepL Translation", 
-                                "Please configure your DeepL API key in the DeepL tab first.", "OK");
-                        }
-                    }
-                    EditorGUILayout.EndHorizontal();
+                    
+                    tooltipContent = "DeepL Query Preview:\n\n" +
+                        $"Text: \"{textToTranslate}\"\n" +
+                        $"Target Language: {language}\n" +
+                        (includeContextInTranslation && selectedKeys.Count == 1 ? $"Context: \"{context}\"\n" : "No context will be sent\n") +
+                        $"Formality: {(formalityPreference ? "More formal" : "Less formal")}\n" +
+                        $"Preserve Formatting: {(preserveFormatting ? "Yes" : "No")}";
                 }
                 else
                 {
-                    EditorGUILayout.BeginHorizontal();
-                    EditorGUILayout.LabelField(language, GUILayout.Width(150));
-                    EditorGUILayout.HelpBox($"No translation data available for {language}", MessageType.Warning);
-                    EditorGUILayout.EndHorizontal();
+                    tooltipContent = "DeepL API key not set. Add one in the settings to enable machine translation.";
                 }
+
+                // Add translate button with tooltip
+                if (GUILayout.Button(new GUIContent("Translate", tooltipContent), GUILayout.Width(70)))
+                {
+                    // Handle translation for multiple keys
+                    foreach (var key in selectedKeys)
+                    {
+                        string textToTranslate = key;
+                        
+                        var assetRef = translationData.languageDataDictionary[i];
+                        // Only include context for single selection to avoid mixing contexts
+                        string context = includeContextInTranslation && selectedKeys.Count == 1 
+                            ? translationData.Metadata.GetTranslationContext(key)
+                            : "";
+                            string assetPath = AssetDatabase.GUIDToAssetPath(assetRef.AssetGUID);
+                        LanguageData languageData = AssetDatabase.LoadAssetAtPath<LanguageData>(assetPath);
+                        TranslateSingleField(textToTranslate, language, i, languageData);
+                    }
+                }
+
+                EditorGUILayout.EndHorizontal();
             }
         }
 
@@ -1765,6 +1906,102 @@ namespace PSS
             }
             
             return false;
+        }
+
+        // Helper method to check if all selected keys have the same context value for a specific category
+        private bool AllSelectedKeysHaveSameContextValue(string category, out string commonValue)
+        {
+            commonValue = null;
+            
+            if (selectedKeys.Count == 0)
+                return false;
+
+            var firstContext = translationData.Metadata.GetContext(selectedKeys.First());
+            if (!firstContext.TryGetValue(category, out commonValue))
+            {
+                commonValue = "";
+            }
+            
+            // For single selection, value is always common
+            if (selectedKeys.Count == 1)
+                return true;
+                
+            // Check if all keys have the same context value
+            foreach (var key in selectedKeys.Skip(1))
+            {
+                var keyContext = translationData.Metadata.GetContext(key);
+                string value = "";
+                if (keyContext.TryGetValue(category, out value))
+                {
+                    if (value != commonValue)
+                        return false;
+                }
+                else if (!string.IsNullOrEmpty(commonValue))
+                {
+                    return false;
+                }
+            }
+            
+            return true;
+        }
+        
+        // Helper method to check if all selected keys have the same translation for a language
+        private bool AllSelectedKeysHaveSameTranslation(string language, int languageIndex, out string commonTranslation)
+        {
+            commonTranslation = null;
+            
+            if (selectedKeys.Count == 0)
+                return false;
+                
+            // For single selection, value is always common
+            if (selectedKeys.Count == 1)
+            {
+                int keyIndex = translationData.allKeys.IndexOf(selectedKeys.First());
+                var assetRef1 = translationData.languageDataDictionary[languageIndex];
+                string assetPath1 = AssetDatabase.GUIDToAssetPath(assetRef1.AssetGUID);
+                LanguageData languageData1 = AssetDatabase.LoadAssetAtPath<LanguageData>(assetPath1);
+                
+                if (languageData1 != null && keyIndex >= 0 && keyIndex < languageData1.allText.Count)
+                {
+                    commonTranslation = languageData1.allText[keyIndex];
+                    return true;
+                }
+                return false;
+            }
+            
+            // Check all translations
+            Dictionary<string, int> keyIndexes = new Dictionary<string, int>();
+            foreach (var key in selectedKeys)
+            {
+                keyIndexes[key] = translationData.allKeys.IndexOf(key);
+            }
+            
+            // Get first translation as reference
+            string firstKey = selectedKeys.First();
+            int firstKeyIndex = keyIndexes[firstKey];
+            
+            var assetRef = translationData.languageDataDictionary[languageIndex];
+            string assetPath = AssetDatabase.GUIDToAssetPath(assetRef.AssetGUID);
+            LanguageData languageData = AssetDatabase.LoadAssetAtPath<LanguageData>(assetPath);
+            
+            if (languageData == null || firstKeyIndex < 0 || firstKeyIndex >= languageData.allText.Count)
+                return false;
+                
+            commonTranslation = languageData.allText[firstKeyIndex];
+            
+            // Compare all other translations
+            foreach (var key in selectedKeys.Skip(1))
+            {
+                int keyIndex = keyIndexes[key];
+                if (keyIndex < 0 || keyIndex >= languageData.allText.Count)
+                    return false;
+                    
+                string translation = languageData.allText[keyIndex];
+                if (translation != commonTranslation)
+                    return false;
+            }
+            
+            return true;
         }
     }
 } 

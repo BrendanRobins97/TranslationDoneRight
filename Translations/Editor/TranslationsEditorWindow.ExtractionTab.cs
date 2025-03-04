@@ -112,6 +112,34 @@ namespace PSS
                             );
                             
                             GUILayout.FlexibleSpace();
+                            
+                            // Add "Extract Only" button
+                            if (isEnabled)
+                            {
+                                if (GUILayout.Button(new GUIContent("Merge", $"Run only the {extractor.SourceType} extractor (always uses Merge mode)"), GUILayout.Width(100)))
+                                {
+                                    if (EditorUtility.DisplayDialog("Extract Text", 
+                                        $"This will extract text using only the {extractor.SourceType} extractor and merge it with existing translation keys. Continue?", 
+                                        "Extract", "Cancel"))
+                                    {
+                                        HandleExtractionStarted();
+                                        // Save the current keys before extraction
+                                        previousKeys = new HashSet<string>(translationData.allKeys);
+                                        
+                                        // Extract text using only this extractor
+                                        var extractedText = TextExtractor.ExtractTextFromTypes(translationData, extractorType);
+                                        
+                                        // Always use merge mode when extracting a single extractor
+                                        TextExtractor.UpdateTranslationData(translationData, extractedText, KeyUpdateMode.Merge);
+                                        
+                                        // Process the extracted text just as the event handler would
+                                        HandleExtractionComplete(extractedText);
+                                        
+                                        EditorUtility.SetDirty(translationData);
+                                    }
+                                }
+                            }
+                            
                             EditorGUILayout.LabelField($"Priority: {extractor.Priority}", EditorStyles.miniLabel);
                             
                             if (newEnabled != isEnabled)

@@ -54,6 +54,8 @@ namespace PSS
 
         private HashSet<string> previousKeys = new HashSet<string>();
 
+        private TranslationMetadata translationMetadata;
+
         [MenuItem("Window/Translations")]
         public static void ShowWindow()
         {
@@ -62,10 +64,21 @@ namespace PSS
 
         private void OnEnable()
         {
-            translationData = Resources.Load<TranslationData>("TranslationData");
+            translationData = TranslationDataProvider.Data;
+            
+            // Load TranslationMetadata
+            translationMetadata = TranslationDataProvider.Metadata;
+            
+            // Set up the window
+            titleContent = new GUIContent("Translations Manager");
+            minSize = new Vector2(900, 500);
+            
+            // Initialize the translation data path from the TranslationDataProvider
+            translationDataPath = TranslationDataProvider.BaseFolder;
+            
             LoadEditorPrefs();
             needsCoverageUpdate = true;
-
+            
             // Initialize search settings
             searchSettingsInstance = CreateInstance<SearchSettings>();
             searchSettingsInstance.hideFlags = HideFlags.DontSave;
@@ -100,16 +113,12 @@ namespace PSS
         private void HandleExtractionStarted()
         {
             EditorUtility.DisplayProgressBar("Extracting Text", "Starting extraction...", 0f);
-            TextExtractor.Metadata = translationData?.Metadata;
+            TextExtractor.Metadata = translationMetadata;
 
             // Store current keys for comparison
             previousKeys = new HashSet<string>(translationData.allKeys);
 
-            // Only clear states in ReplaceCompletely mode
-            if (updateMode == KeyUpdateMode.ReplaceCompletely)
-            {
-                translationData.Metadata.ClearTextStates();
-            }
+            translationMetadata.ClearTextStates();
         }
 
         private void HandleExtractionComplete(HashSet<string> extractedText)
@@ -119,11 +128,11 @@ namespace PSS
             // Mark new text in all modes
             foreach (var text in extractedText)
             {
-                if (!previousKeys.Contains(text) || translationData.Metadata.GetTextState(text) == TextState.Missing)
+                if (updateMode == KeyUpdateMode.ReplaceCompletely || !previousKeys.Contains(text))
                 {
                     translationData.Metadata.SetTextState(text, TextState.New);
                 } else {
-                    translationData.Metadata.SetTextState(text, TextState.None);
+                    translationData.Metadata.SetTextState(text, TextState.Recent);
                 }
             }
 
@@ -208,8 +217,8 @@ namespace PSS
                 currentTab = Tab.TextExtraction;
             if (GUILayout.Toggle(currentTab == Tab.Languages, new GUIContent(" Languages", EditorGUIUtility.IconContent("d_BuildSettings.Standalone").image), EditorStyles.toolbarButton))
                 currentTab = Tab.Languages;
-            if (GUILayout.Toggle(currentTab == Tab.DeepL, new GUIContent(" DeepL", EditorGUIUtility.IconContent("d_BuildSettings.Web.Small").image), EditorStyles.toolbarButton))
-                currentTab = Tab.DeepL;
+            if (GUILayout.Toggle(currentTab == Tab.Config, new GUIContent(" Config", EditorGUIUtility.IconContent("d_SettingsIcon").image), EditorStyles.toolbarButton))
+                currentTab = Tab.Config;
             EditorGUILayout.EndHorizontal();
 
             EditorGUILayout.Space(5);
@@ -227,8 +236,8 @@ namespace PSS
                     case Tab.TextExtraction:
                         DrawTextExtractionTab();
                         break;
-                    case Tab.DeepL:
-                        DrawDeepLTab();
+                    case Tab.Config:
+                        DrawConfigTab();
                         break;
                 }
 
@@ -243,7 +252,7 @@ namespace PSS
 
         private void DrawNoTranslationDataUI()
         {
-            EditorGUILayout.HelpBox("No TranslationData asset found in Resources folder.", MessageType.Warning);
+            EditorGUILayout.HelpBox("No TranslationData asset found.", MessageType.Warning);
             
             if (GUILayout.Button("Create TranslationData Asset"))
             {
@@ -265,27 +274,11 @@ namespace PSS
 
         private void CreateTranslationDataAsset()
         {
-            translationData = ScriptableObject.CreateInstance<TranslationData>();
-            
-            // Create folder structure
-            if (!AssetDatabase.IsValidFolder("Assets/Translations"))
-            {
-                AssetDatabase.CreateFolder("Assets", "Translations");
-            }
-            if (!AssetDatabase.IsValidFolder("Assets/Translations/Languages"))
-            {
-                AssetDatabase.CreateFolder("Assets/Translations", "Languages");
-            }
-            if (!AssetDatabase.IsValidFolder("Assets/Resources"))
-            {
-                AssetDatabase.CreateFolder("Assets", "Resources");
-            }
-            
-            AssetDatabase.CreateAsset(translationData, "Assets/Resources/TranslationData.asset");
-            AssetDatabase.SaveAssets();
+            // Use the TranslationDataProvider to create a new TranslationData asset
+            translationData = TranslationDataProvider.Data;
             Selection.activeObject = translationData;
             
-            Debug.Log("Created new TranslationData asset in Resources folder");
+            Debug.Log("Created new TranslationData asset");
         }
 
         private void DrawProgressBar(float value)

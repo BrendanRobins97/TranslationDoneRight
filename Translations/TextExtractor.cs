@@ -303,7 +303,7 @@ namespace PSS
         /// </summary>
         /// <param name="extractorTypes">The types of extractors to use.</param>
         /// <returns>A HashSet containing all extracted text.</returns>
-        public static HashSet<string> ExtractTextFromTypes(params Type[] extractorTypes)
+        public static HashSet<string> ExtractTextFromTypes(TranslationData translationData,params Type[] extractorTypes)
         {
             HashSet<string> extractedText = new HashSet<string>();
             
@@ -324,6 +324,7 @@ namespace PSS
 
                 try
                 {
+                    Metadata = translationData?.Metadata;
                     OnExtractorStarted?.Invoke(extractor);
                     var newText = extractor.ExtractText(Metadata);
                     extractedText.UnionWith(newText);

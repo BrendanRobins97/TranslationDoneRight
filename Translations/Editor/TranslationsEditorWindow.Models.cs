@@ -9,7 +9,7 @@ namespace PSS
             TextExtraction,
             AllText,
             Languages,
-            DeepL
+            Config
         }
         
         private enum TextViewMode

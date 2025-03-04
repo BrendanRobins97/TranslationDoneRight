@@ -38,10 +38,6 @@ namespace PSS
         [OdinSerialize]
         public Dictionary<string, string> keyContexts = new Dictionary<string, string>();
 
-        // Reference to the metadata asset
-        [SerializeField]
-        private TranslationMetadata metadata;
-
         // Cache for quick text lookup
         [SerializeField]
         private SerializableDictionary<string, string> textToGroupKeyCache = new SerializableDictionary<string, string>();
@@ -112,23 +108,8 @@ namespace PSS
         {
             get
             {
-                if (metadata == null)
-                {
-                    metadata = Resources.Load<TranslationMetadata>("TranslationMetadata");
-#if UNITY_EDITOR
-                    if (metadata == null)
-                    {
-                        metadata = ScriptableObject.CreateInstance<TranslationMetadata>();
-                        if (!AssetDatabase.IsValidFolder("Assets/Resources"))
-                        {
-                            AssetDatabase.CreateFolder("Assets", "Resources");
-                        }
-                        AssetDatabase.CreateAsset(metadata, "Assets/Resources/TranslationMetadata.asset");
-                        AssetDatabase.SaveAssets();
-                    }
-#endif
-                }
-                return metadata;
+                // Forward to the static provider instead
+                return TranslationDataProvider.Metadata;
             }
         }
 

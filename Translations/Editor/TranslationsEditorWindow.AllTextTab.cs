@@ -409,7 +409,7 @@ namespace PSS
                             int missingCount = selectedKeys.Count(k => NeedsTranslations(k));
                             if (missingCount > 0)
                             {
-                                if (GUILayout.Button($"Translations Needed ({missingCount})", buttonStyle, GUILayout.Width(250), GUILayout.Height(30)))
+                                if (GUILayout.Button($"Translate Missing ({missingCount})", buttonStyle, GUILayout.Width(250), GUILayout.Height(30)))
                                 {
                                     foreach (var selectedKey in selectedKeys)
                                     {
@@ -899,6 +899,14 @@ namespace PSS
                 padding = new RectOffset(0, 2, 0, 0)
             };
 
+            var recentLabelStyle = new GUIStyle(EditorStyles.miniLabel)
+            {
+                normal = { textColor = new Color(0.6f, 0.6f, 0.6f) },
+                fontSize = 9,
+                alignment = TextAnchor.MiddleRight,
+                padding = new RectOffset(0, 2, 0, 0)
+            };
+
             if (filteredKeysList.Count > 0)
             {
                 // Calculate which items should be visible
@@ -970,6 +978,10 @@ namespace PSS
                     if (translationData.Metadata.IsNewText(key))
                     {
                         EditorGUI.LabelField(newLabelRect, "new", newLabelStyle);
+                    }
+                    if (translationData.Metadata.IsRecentText(key))
+                    {
+                        EditorGUI.LabelField(newLabelRect, "recent", recentLabelStyle);
                     }
 
                     // Handle mouse events for selection
@@ -1250,7 +1262,7 @@ namespace PSS
                         int missingCount = selectedKeys.Count(k => NeedsTranslations(k));
                         if (missingCount > 0)
                         {
-                            if (GUILayout.Button($"Translations Needed ({missingCount})", buttonStyle, GUILayout.Width(200)))
+                            if (GUILayout.Button($"Translate Missing ({missingCount})", buttonStyle, GUILayout.Width(200)))
                             {
                                 foreach (var selectedKey in selectedKeys)
                                 {

@@ -331,10 +331,12 @@ namespace PSS
             }
 
             // Get all files in the Languages folder
-            string languagesFolderPath = "Assets/Translations/Languages";
+            string languagesFolderPath = TranslationDataProvider.LanguagesFolder;
             if (!AssetDatabase.IsValidFolder(languagesFolderPath))
             {
-                AssetDatabase.CreateFolder("Assets/Translations", "Languages");
+                string parentFolder = System.IO.Path.GetDirectoryName(languagesFolderPath);
+                string folderName = System.IO.Path.GetFileName(languagesFolderPath);
+                AssetDatabase.CreateFolder(parentFolder, folderName);
             }
             
             var existingFiles = System.IO.Directory.GetFiles(languagesFolderPath, "*.asset")
@@ -461,14 +463,12 @@ namespace PSS
 
         private void CreateLanguageAsset(string language)
         {
-            // Ensure the Translations directory exists
-            if (!AssetDatabase.IsValidFolder("Assets/Translations"))
+            // Ensure the Languages folder exists
+            string languagesFolderPath = TranslationDataProvider.LanguagesFolder;
+            if (!AssetDatabase.IsValidFolder(languagesFolderPath))
             {
-                AssetDatabase.CreateFolder("Assets", "Translations");
-            }
-            if (!AssetDatabase.IsValidFolder("Assets/Translations/Languages"))
-            {
-                AssetDatabase.CreateFolder("Assets/Translations", "Languages");
+                // Use our own helper method to ensure the directory exists
+                EnsureDirectoryExists(languagesFolderPath);
             }
 
             string sanitizedName = SanitizeFileName(language);
@@ -595,12 +595,12 @@ namespace PSS
 
         private string GetLanguageAssetPath(string sanitizedName)
         {
-            return $"Assets/Translations/Languages/LanguageData_{sanitizedName}.asset";
+            return System.IO.Path.Combine(TranslationDataProvider.LanguagesFolder, $"LanguageData_{sanitizedName}.asset");
         }
 
         private string SanitizeFileName(string fileName)
         {
-            return fileName.Replace(" ", "_").Replace("(", "_").Replace(")", "_");
+            return fileName.Replace(" ", "_").Replace("(", "").Replace(")", "");
         }
     }
 } 

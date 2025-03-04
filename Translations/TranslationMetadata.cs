@@ -84,6 +84,7 @@ namespace PSS
     {
         None,
         New,
+        Recent,
         Missing,
     }
 
@@ -314,6 +315,11 @@ namespace PSS
         public bool IsNewText(string text)
         {
             return textStates.TryGetValue(text, out var state) && (state == TextState.New);
+        }
+
+        public bool IsRecentText(string text)
+        {
+            return textStates.TryGetValue(text, out var state) && (state == TextState.Recent);
         }
 
         public bool IsMissingText(string text)

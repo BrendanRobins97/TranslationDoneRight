@@ -27,25 +27,7 @@ namespace PSS
             {
                 if (translationData == null)
                 {
-                    translationData = Resources.Load<TranslationData>("TranslationData");
-
-#if UNITY_EDITOR
-                    if (translationData == null)
-                    {
-                        // Create the TranslationData asset if it doesn't exist
-                        translationData = ScriptableObject.CreateInstance<TranslationData>();
-                        
-                        // Ensure the Resources folder exists
-                        if (!AssetDatabase.IsValidFolder("Assets/Resources"))
-                        {
-                            AssetDatabase.CreateFolder("Assets", "Resources");
-                        }
-                        
-                        AssetDatabase.CreateAsset(translationData, "Assets/Resources/TranslationData.asset");
-                        AssetDatabase.SaveAssets();
-                        Debug.Log("Created new TranslationData asset in Resources folder");
-                    }
-#endif
+                    translationData = TranslationDataProvider.Data;
                 }
                 return translationData;
             }

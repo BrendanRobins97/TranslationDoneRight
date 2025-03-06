@@ -1,6 +1,6 @@
 using UnityEngine;
 using TMPro;
-using PSS;
+using Translations;
 
 public class TranslatedTMPExamples : MonoBehaviour
 {

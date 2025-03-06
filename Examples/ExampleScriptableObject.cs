@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using PSS;
+using Translations;
 using UnityEngine;
 
 [CreateAssetMenu(fileName = "ExampleScriptableObject", menuName = "ExampleScriptableObject")]

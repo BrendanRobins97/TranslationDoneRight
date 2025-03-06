@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using Sirenix.OdinInspector;
 using UnityEngine;
 
-namespace PSS
+namespace Translations
 {
     /// <summary>
     /// Example script demonstrating all supported ways to use the [Translated] attribute
@@ -40,13 +40,6 @@ namespace PSS
         [Translated]
         public DialogueContainer dialogueContainer = new DialogueContainer();
 
-        [Translated]
-        public List<QuestData> quests = new List<QuestData>
-        {
-            new QuestData(),
-            new QuestData()
-        };
-
         public void Start()
         {
             Application.targetFrameRate = 20;
@@ -58,8 +51,6 @@ namespace PSS
         {
             Debug.Log("Hello World Translations".TranslateString());
             Debug.Log(Translations.Translate("Blue"));
-            Debug.Log(Translations.Translate("Yellow"));
-            Debug.Log(Translations.Translate(myString));
         }
     }
 

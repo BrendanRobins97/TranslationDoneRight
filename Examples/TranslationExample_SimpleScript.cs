@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using Sirenix.OdinInspector;
 using UnityEngine;
 
-namespace PSS
+namespace Translations
 {
     /// <summary>
     /// Example script demonstrating all supported ways to use the [Translated] attribute

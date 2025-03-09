@@ -1,0 +1,84 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 70a4a4e03c0fbb54d96a57a1ff858c0f, type: 3}
+  m_Name: QuestDatabase
+  m_EditorClassIdentifier: 
+  availableQuests:
+  - questID: main_quest_1
+    title: The Ancient Artifact
+    description: The village elder has tasked you with finding the legendary Crystal
+      of Eternity, lost in the Forsaken Ruins.
+    startDialogue: Our village has protected the secret of the Crystal for generations.
+      Now, with dark forces rising, you must retrieve it before it falls into the
+      wrong hands.
+    completeDialogue: You've done it! The Crystal is safe once more. The village
+      is forever in your debt.
+    failDialogue: I'm disappointed that you couldn't complete this task. Perhaps
+      another adventurer will have better luck.
+    objectives:
+    - Enter the Forsaken Ruins
+    - Find the hidden chamber
+    - Retrieve the Crystal of Eternity
+    - Return to the village elder
+    rewards:
+    - 500 Gold
+    - Ancient Enchanted Armor
+    - Village Hero Status
+  - questID: side_quest_fishing
+    title: The Perfect Catch
+    description: The local fisherman needs exotic fish for an upcoming festival.
+      Catch three Glowing Angelfish from the Moonlit Lake.
+    startDialogue: The festival is in three days, and I need those special fish!
+      They only appear when the moon is reflected perfectly in the lake's center.
+    completeDialogue: These are perfect specimens! The festival will be a huge success,
+      thanks to you!
+    failDialogue: I'm disappointed that you couldn't complete this task. Perhaps
+      another adventurer will have better luck.
+    objectives:
+    - Visit the Moonlit Lake at night
+    - Use the Special Lure to attract Glowing Angelfish
+    - Catch 3 Glowing Angelfish
+    - Return to the fisherman
+    rewards:
+    - Fishing Master's Rod
+    - 'Recipe: Exotic Fish Stew'
+    - 250 Gold
+  - questID: side_quest_haunted
+    title: The Haunted Mansion
+    description: Strange noises have been reported from the abandoned mansion on
+      the hill. Investigate what's causing them.
+    startDialogue: Nobody's been brave enough to check what's happening at the old
+      Willowbrook Estate. Some say it's ghosts, others say it's bandits using it
+      as a hideout.
+    completeDialogue: A magical music box was causing the haunting? Incredible! And
+      you say it produces different melodies depending on who holds it? Fascinating!
+    failDialogue: I'm disappointed that you couldn't complete this task. Perhaps
+      another adventurer will have better luck.
+    objectives:
+    - Enter Willowbrook Estate
+    - Investigate the strange noises
+    - Discover the source
+    - Resolve the situation
+    - Report back to the village council
+    rewards:
+    - Enchanted Music Box
+    - Deed to Willowbrook Estate
+    - 350 Gold
+  questCategories:
+  - Main Story
+  - Side Quests
+  - Crafting
+  - Exploration
+  - Combat Challenges
+  questCompletedMessage: Quest Completed!
+  questFailedMessage: Quest Failed!
+  questUpdatedMessage: Quest Updated!

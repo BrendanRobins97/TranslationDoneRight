@@ -2,7 +2,6 @@ using UnityEngine;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Sirenix.Utilities;
 
 namespace Translations
 {
@@ -133,7 +132,7 @@ namespace Translations
                 {
                     textCategories[key].Items.Add(newCategory);
                 }
-                if (!oldCategory.IsNullOrWhitespace())
+                if (!string.IsNullOrEmpty(oldCategory))
                 {
                     // Update all existing contexts using this category
                     foreach (var textKey in textContexts.Keys.ToList())

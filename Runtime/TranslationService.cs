@@ -1,12 +1,6 @@
-using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text.RegularExpressions;
 using UnityEngine;
 using TMPro;
-using UnityEngine.AddressableAssets;
-using UnityEngine.ResourceManagement.AsyncOperations;
-using Sirenix.OdinInspector;
 
 namespace Translations
 {
@@ -14,34 +8,38 @@ namespace Translations
     /// Service responsible for handling runtime translations, parameter substitution,
     /// and language switching functionality.
     /// </summary>
-    public class TranslationService : MonoBehaviour
+    public static class TranslationService
     {
-        private Dictionary<TextMeshProUGUI, string> originalTexts = new Dictionary<TextMeshProUGUI, string>();
-        private Dictionary<TextMeshProUGUI, TMP_FontAsset> originalFonts = new Dictionary<TextMeshProUGUI, TMP_FontAsset>();
+        private static Dictionary<TextMeshProUGUI, string> originalTexts = new Dictionary<TextMeshProUGUI, string>();
+        private static Dictionary<TextMeshProUGUI, TMP_FontAsset> originalFonts = new Dictionary<TextMeshProUGUI, TMP_FontAsset>();
+        private static bool isInitialized = false;
 
-        private void Awake()
+        /// <summary>
+        /// Initialize the translation service. Call this at application startup.
+        /// </summary>
+        public static void Initialize()
         {
-            DontDestroyOnLoad(gameObject);
+            if (isInitialized) return;
+            
             TranslationManager.OnLanguageChanged += Refresh;
-
             Refresh();
+            isInitialized = true;
         }
 
-        public void Refresh()
+        public static void Refresh()
         {
             StoreOriginalTexts();
             UpdateAllTexts();
         }
 
-        [Button]
-        public void ChangeLanguage(string language)
+        public static void ChangeLanguage(string language)
         {
             TranslationManager.ChangeLanguage(language);
         }
 
-        private void StoreOriginalTexts()
+        private static void StoreOriginalTexts()
         {
-            TextMeshProUGUI[] textObjects = FindObjectsOfType<TextMeshProUGUI>();
+            TextMeshProUGUI[] textObjects = Object.FindObjectsOfType<TextMeshProUGUI>();
 
             foreach (TextMeshProUGUI textObject in textObjects)
             {
@@ -62,7 +60,7 @@ namespace Translations
             }
         }
 
-        private void UpdateAllTexts()
+        private static void UpdateAllTexts()
         {
             foreach (var entry in originalTexts)
             {
@@ -83,7 +81,6 @@ namespace Translations
                     // Reset font
                     textObject.font = tmpFontAsset;
                 }
-
             }
         }
     }

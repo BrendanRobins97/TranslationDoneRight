@@ -1,56 +1,17 @@
+#if UNITY_EDITOR
 using UnityEngine;
 using System.IO;
-using UnityEngine.AddressableAssets;
-using UnityEngine.ResourceManagement.AsyncOperations;
-#if UNITY_EDITOR
 using UnityEditor;
 using UnityEditor.AddressableAssets;
 using UnityEditor.AddressableAssets.Settings;
-#endif
 
 namespace Translations
 {
     public static class TranslationMetaDataProvider
     {
-        // Base folder where all translation assets will be stored
-        private const string DEFAULT_BASE_FOLDER = "Assets/Translations";
-        
-        // Subfolders for organizing different types of assets
-        private const string DATA_SUBFOLDER = "Data";
-        private const string LANGUAGES_SUBFOLDER = "Languages";
-        
-        // Expose the default folders for UI
-        public static string DefaultBaseFolder => DEFAULT_BASE_FOLDER;
-        public static string DefaultDataFolder => $"{DEFAULT_BASE_FOLDER}/{DATA_SUBFOLDER}";
-        public static string DefaultLanguagesFolder => $"{DEFAULT_BASE_FOLDER}/{LANGUAGES_SUBFOLDER}";
-        // The actual base folder which can be changed via the UI
-        private static string currentBaseFolder = null;
-        
-        // Property to get the current base folder
-        public static string BaseFolder 
-        {
-            get 
-            {
-                if (currentBaseFolder == null)
-                {
-                    #if UNITY_EDITOR
-                    currentBaseFolder = EditorPrefs.GetString("TranslationManager_BasePath", DEFAULT_BASE_FOLDER);
-                    #else
-                    currentBaseFolder = DEFAULT_BASE_FOLDER;
-                    #endif
-                }
-                return currentBaseFolder;
-            }
-        }
-        
-        // Property to get the data folder (where TranslationData and MetaData are stored)
-        public static string DataFolder => $"{BaseFolder}/{DATA_SUBFOLDER}";
-        
-        // Property to get the languages folder (where LanguageData assets are stored)
-        public static string LanguagesFolder => $"{BaseFolder}/{LANGUAGES_SUBFOLDER}";
-        
-        // Path to the main translation data asset
-        private static string DataPath => $"{DataFolder}/TranslationData.asset";
+        // Path to the main translation data and metadata assets
+        private static string DataPath => $"{TranslationPaths.DataFolder}/TranslationData.asset";
+        private static string MetadataPath => $"{TranslationPaths.DataFolder}/TranslationMetadata.asset";
         
         // Addressable key for the TranslationData asset
         private const string TRANSLATION_DATA_KEY = "TranslationData";
@@ -60,27 +21,6 @@ namespace Translations
         
         // This will store the loaded TranslationMetadata asset
         private static TranslationMetadata cachedTranslationMetadata;
-        
-        // Flag to track if Addressables initialization has been attempted
-        private static bool addressablesInitialized = false;
-        
-        /// <summary>
-        /// Set the base folder to a new location
-        /// </summary>
-        /// <param name="newFolder">The new base folder path relative to Assets</param>
-        public static void SetDataFolder(string newFolder)
-        {
-            if (string.IsNullOrEmpty(newFolder) || newFolder == currentBaseFolder)
-                return;
-                
-            currentBaseFolder = newFolder;
-            #if UNITY_EDITOR
-            EditorPrefs.SetString("TranslationManager_BasePath", newFolder);
-            #endif
-            
-            // Clear the cache to force reload from the new location
-            cachedTranslationData = null;
-        }
         
         // Property to access the TranslationMetadata asset
         public static TranslationMetadata Metadata
@@ -112,7 +52,7 @@ namespace Translations
         }
 
         /// <summary>
-        /// Load the TranslationMetadata asset from Resources or create a new one
+        /// Load the TranslationMetadata asset from the data folder or create a new one
         /// </summary>
         /// <returns>The existing or newly created TranslationMetadata asset</returns>
         private static TranslationMetadata LoadOrCreateTranslationMetadata()
@@ -121,22 +61,17 @@ namespace Translations
             if (cachedTranslationMetadata != null)
                 return cachedTranslationMetadata;
             
-            // Load from Resources
-            var metadata = Resources.Load<TranslationMetadata>("TranslationMetadata");
+            // Try to load the metadata from the data folder
+            var metadata = AssetDatabase.LoadAssetAtPath<TranslationMetadata>(MetadataPath);
             
-#if UNITY_EDITOR
             // Create if it doesn't exist
             if (metadata == null)
             {
                 metadata = ScriptableObject.CreateInstance<TranslationMetadata>();
-                if (!AssetDatabase.IsValidFolder("Assets/Resources"))
-                {
-                    AssetDatabase.CreateFolder("Assets", "Resources");
-                }
-                AssetDatabase.CreateAsset(metadata, "Assets/Resources/TranslationMetadata.asset");
+                EnsureDirectoryExists(TranslationPaths.DataFolder);
+                AssetDatabase.CreateAsset(metadata, MetadataPath);
                 AssetDatabase.SaveAssets();
             }
-#endif
             
             cachedTranslationMetadata = metadata;
             return metadata;
@@ -148,59 +83,8 @@ namespace Translations
         /// <returns>The TranslationData asset, or null if it doesn't exist</returns>
         private static TranslationData LoadTranslationData()
         {
-#if UNITY_EDITOR
-            // Load from the location
             return AssetDatabase.LoadAssetAtPath<TranslationData>(DataPath);
-#else
-            // Initialize Addressables if it hasn't been initialized yet
-            if (!addressablesInitialized)
-            {
-                InitializeAddressables();
-            }
-            
-            // For runtime, we'll use Addressables to load the asset
-            // This is a synchronous loading approach, which is acceptable for this core asset
-            // that needs to be available immediately
-            try
-            {
-                AsyncOperationHandle<TranslationData> handle = Addressables.LoadAssetAsync<TranslationData>(TRANSLATION_DATA_KEY);
-                handle.WaitForCompletion();
-                
-                if (handle.Status == AsyncOperationStatus.Succeeded)
-                {
-                    return handle.Result;
-                }
-                else
-                {
-                    Debug.LogError($"Failed to load TranslationData asset via Addressables: {handle.OperationException}");
-                    return null;
-                }
-            }
-            catch (System.Exception e)
-            {
-                Debug.LogError($"Exception when loading TranslationData asset via Addressables: {e.Message}");
-                return null;
-            }
-#endif
         }
-
-#if !UNITY_EDITOR
-        /// <summary>
-        /// Initialize the Addressables system
-        /// </summary>
-        private static void InitializeAddressables()
-        {
-            try
-            {
-                Addressables.InitializeAsync().WaitForCompletion();
-                addressablesInitialized = true;
-            }
-            catch (System.Exception e)
-            {
-                Debug.LogError($"Failed to initialize Addressables: {e.Message}");
-            }
-        }
-#endif
 
         /// <summary>
         /// Create a new TranslationData asset at the specified location
@@ -208,14 +92,13 @@ namespace Translations
         /// <returns>The newly created TranslationData asset</returns>
         private static TranslationData CreateTranslationData()
         {
-#if UNITY_EDITOR
             TranslationData translationData = ScriptableObject.CreateInstance<TranslationData>();
             
             // Create the necessary folder structure
-            EnsureDirectoryExists(DataFolder);
+            EnsureDirectoryExists(TranslationPaths.DataFolder);
             
             // Create the language folder if it doesn't exist
-            EnsureDirectoryExists(LanguagesFolder);
+            EnsureDirectoryExists(TranslationPaths.LanguagesFolder);
             
             // Create the asset
             AssetDatabase.CreateAsset(translationData, DataPath);
@@ -228,13 +111,8 @@ namespace Translations
             
             Debug.Log($"Created new TranslationData asset at: {DataPath}");
             return translationData;
-#else
-            Debug.LogError("Cannot create TranslationData asset at runtime");
-            return null;
-#endif
         }
 
-#if UNITY_EDITOR
         /// <summary>
         /// Ensure that the directory exists, creating it if necessary
         /// </summary>
@@ -289,16 +167,6 @@ namespace Translations
         }
         
         /// <summary>
-        /// Get the path for a language data asset
-        /// </summary>
-        /// <param name="languageCode">The language code</param>
-        /// <returns>The path where the language data asset should be stored</returns>
-        public static string GetLanguageDataPath(string languageCode)
-        {
-            return $"{LanguagesFolder}/{languageCode}.asset";
-        }
-        
-        /// <summary>
         /// Add a language data asset to Addressables
         /// </summary>
         /// <param name="languageCode">The language code</param>
@@ -307,6 +175,6 @@ namespace Translations
         {
             AddAssetToAddressables(assetPath, languageCode);
         }
-#endif
     }
-} 
+}
+#endif 

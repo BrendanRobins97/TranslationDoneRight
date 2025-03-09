@@ -29,15 +29,7 @@ namespace Translations
         public static TranslationMetadata Metadata 
         { 
             get => _metadata;
-            set
-            {
-                bool shouldClear = value != null && value != _metadata;
-                _metadata = value;
-                if (shouldClear)
-                {
-                    _metadata.ClearAllSources();
-                }
-            }
+            set => _metadata = value;  // Don't clear sources on set
         }
 
         static TextExtractor()
@@ -101,9 +93,6 @@ namespace Translations
             HashSet<string> extractedText = new HashSet<string>();
 
             OnExtractionStarted?.Invoke();
-
-            // Clear metadata if it exists
-            Metadata?.ClearAllSources();
 
             foreach (var extractor in _extractors)
             {
@@ -227,9 +216,41 @@ namespace Translations
                 return;
             }
 
-            // Clear metadata for keys that will be removed
+            // For complete replacement, clear all data first
             if (updateMode == KeyUpdateMode.ReplaceCompletely)
             {
+                // Store extraction sources before clearing
+                var globalSources = TranslationMetaDataProvider.Metadata?.extractionSources;
+
+                // Clear all metadata except extraction sources
+                TranslationMetaDataProvider.Metadata?.ClearAllSources();
+                
+                // Restore extraction sources
+                if (TranslationMetaDataProvider.Metadata != null)
+                {
+                    TranslationMetaDataProvider.Metadata.extractionSources = globalSources ?? new List<ExtractionSource>();
+                }
+
+                // Clear all language data first
+                for (int i = 0; i < translationData.languageDataDictionary.Length; i++)
+                {
+                    var assetRef = translationData.languageDataDictionary[i];
+                    string assetPath = AssetDatabase.GUIDToAssetPath(assetRef.AssetGUID);
+                    LanguageData languageData = AssetDatabase.LoadAssetAtPath<LanguageData>(assetPath);
+                    
+                    if (languageData != null)
+                    {
+                        languageData.allText.Clear();
+                        EditorUtility.SetDirty(languageData);
+                    }
+                }
+
+                // Clear main translation data
+                translationData.allKeys.Clear();
+            }
+            else
+            {
+                // Clear metadata only for keys that will be removed
                 foreach (var key in translationData.allKeys)
                 {
                     if (!extractedText.Contains(key))
@@ -237,10 +258,9 @@ namespace Translations
                         TranslationMetaDataProvider.Metadata?.ClearSources(key);
                     }
                 }
-                translationData.allKeys.Clear();
             }
 
-            // Add new keys
+            // Add new keys and their translations
             foreach (string text in extractedText)
             {
                 if (!translationData.allKeys.Contains(text))

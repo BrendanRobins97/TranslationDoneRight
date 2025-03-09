@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System;
 using System.IO;
+using System.Threading.Tasks;
 
 namespace Translations
 {
@@ -30,6 +31,77 @@ namespace Translations
         { 
             get => _metadata;
             set => _metadata = value;  // Don't clear sources on set
+        }
+
+        // Cache for path processing decisions to avoid redundant checks
+        private static Dictionary<string, Dictionary<string, bool>> _pathProcessingCache = new Dictionary<string, Dictionary<string, bool>>();
+        
+        /// <summary>
+        /// Clears the path processing cache
+        /// </summary>
+        public static void ClearPathProcessingCache()
+        {
+            _pathProcessingCache.Clear();
+        }
+
+        // Thread-safe tracking of extraction progress
+        private static readonly object _progressLock = new object();
+        private static float _extractionProgress = 0f;
+        private static string _currentExtractorName = string.Empty;
+        private static Dictionary<string, float> _extractorProgress = new Dictionary<string, float>();
+        private static bool _isExtractionRunning = false;
+
+        public static float ExtractionProgress => _extractionProgress;
+        public static string CurrentExtractorName => _currentExtractorName;
+        public static bool IsExtractionRunning => _isExtractionRunning;
+
+        /// <summary>
+        /// Updates the UI on the main thread during extraction
+        /// </summary>
+        public static void UpdateExtractionProgressUI()
+        {
+            if (_isExtractionRunning)
+            {
+                string currentName;
+                float currentProgress;
+                
+                lock (_progressLock)
+                {
+                    currentName = _currentExtractorName;
+                    currentProgress = _extractionProgress;
+                }
+                
+                // This is safe to call since it's on the main thread
+                EditorUtility.DisplayProgressBar("Extracting Text", 
+                    $"Running {currentName}...", currentProgress);
+            }
+        }
+
+        /// <summary>
+        /// Resets extraction progress tracking
+        /// </summary>
+        private static void ResetExtractionProgress()
+        {
+            lock (_progressLock)
+            {
+                _isExtractionRunning = false;
+                _extractionProgress = 0f;
+                _currentExtractorName = string.Empty;
+                _extractorProgress.Clear();
+            }
+        }
+
+        /// <summary>
+        /// Updates extraction progress in a thread-safe way
+        /// </summary>
+        private static void SetExtractionProgress(ITextExtractor extractor, float progress)
+        {
+            lock (_progressLock)
+            {
+                _isExtractionRunning = true;
+                _currentExtractorName = extractor.GetType().Name;
+                _extractionProgress = progress;
+            }
         }
 
         static TextExtractor()
@@ -90,42 +162,55 @@ namespace Translations
         /// <returns>A HashSet containing all extracted text.</returns>
         public static HashSet<string> ExtractAllText()
         {
-            HashSet<string> extractedText = new HashSet<string>();
+            HashSet<string> extractedText = new HashSet<string>(StringComparer.Ordinal);
 
             OnExtractionStarted?.Invoke();
+            ResetExtractionProgress();
 
-            foreach (var extractor in _extractors)
+            // Get list of enabled extractors
+            var enabledExtractors = _extractors.Where(e => IsExtractorEnabled(e.GetType())).ToList();
+            
+            // Calculate per-extractor progress increment
+            float progressIncrement = 1.0f / enabledExtractors.Count;
+            float currentProgress = 0f;
+
+            // Process each extractor sequentially to avoid threading issues with Unity API
+            foreach (var extractor in enabledExtractors)
             {
-                if (IsExtractorEnabled(extractor.GetType()))
+                SetExtractionProgress(extractor, currentProgress);
+                UpdateExtractionProgressUI();
+                OnExtractorStarted?.Invoke(extractor);
+                currentProgress += progressIncrement;
+                
+                try
                 {
-                    try
+                    var newText = extractor.ExtractText(Metadata);
+                    
+                    // Check for similar texts within this extractor's results
+                    TextSimilarityChecker.CheckForSimilarTexts(newText, $"extractor {extractor.GetType().Name}");
+                    
+                    // Check new texts against existing ones
+                    foreach (var text in newText)
                     {
-                        OnExtractorStarted?.Invoke(extractor);
-                        var newText = extractor.ExtractText(Metadata);
-                        
-                        // Check for similar texts within this extractor's results
-                        TextSimilarityChecker.CheckForSimilarTexts(newText, $"extractor {extractor.GetType().Name}");
-                        
-                        // Check new texts against existing ones
-                        foreach (var text in newText)
-                        {
-                            TextSimilarityChecker.CheckNewTextSimilarity(text, extractedText, $"comparing against existing texts");
-                        }
-                        
-                        extractedText.UnionWith(newText);
-                        OnExtractorFinished?.Invoke(extractor);
+                        TextSimilarityChecker.CheckNewTextSimilarity(text, extractedText, $"comparing against existing texts");
                     }
-                    catch (Exception e)
-                    {
-                        OnExtractionError?.Invoke(extractor, e);
-                        Debug.LogError($"Error in {extractor.GetType().Name}: {e.Message}\n{e.StackTrace}");
-                    }
+                    
+                    extractedText.UnionWith(newText);
+                    OnExtractorFinished?.Invoke(extractor);
+                }
+                catch (Exception e)
+                {
+                    OnExtractionError?.Invoke(extractor, e);
+                    Debug.LogError($"Error in {extractor.GetType().Name}: {e.Message}\n{e.StackTrace}");
                 }
             }
 
             // Final check for similar texts across all extractors
             TextSimilarityChecker.CheckForSimilarTexts(extractedText, "all extracted text");
 
+            // Clear the progress bar when we're done
+            EditorUtility.ClearProgressBar();
+            ResetExtractionProgress();
             OnExtractionComplete?.Invoke(extractedText);
             return extractedText;
         }
@@ -144,11 +229,25 @@ namespace Translations
         /// <returns>True if the path should be processed, false otherwise</returns>
         public static bool ShouldProcessPath(string assetPath, TranslationMetadata metadata, Type extractorType)
         {
+            if (metadata == null) return true;
+            
             // Normalize the asset path
             assetPath = assetPath.Replace('\\', '/').TrimStart('/');
             if (!assetPath.StartsWith("Assets/"))
                 assetPath = "Assets/" + assetPath;
-
+                
+            // Generate cache key
+            string extractorKey = extractorType?.Name ?? "global";
+            
+            // Check cache first
+            if (_pathProcessingCache.TryGetValue(extractorKey, out var pathCache) && 
+                pathCache.TryGetValue(assetPath, out var shouldProcess))
+            {
+                return shouldProcess;
+            }
+            
+            bool result;
+            
             // Check extractor-specific sources first
             if (extractorType != null && 
                 metadata.extractorSources != null && 
@@ -156,14 +255,27 @@ namespace Translations
                 extractorSources.Items.Count > 0)
             {
                 // If extractor has specific sources, use only those
-                return CheckSourcesList(assetPath, extractorSources);
+                result = CheckSourcesList(assetPath, extractorSources);
             }
-
-            // Fall back to global sources
-            if (metadata.extractionSources == null || metadata.extractionSources.Count == 0)
-                return true;
-
-            return CheckSourcesList(assetPath, metadata.extractionSources);
+            else
+            {
+                // Fall back to global sources
+                if (metadata.extractionSources == null || metadata.extractionSources.Count == 0)
+                    result = true;
+                else
+                    result = CheckSourcesList(assetPath, metadata.extractionSources);
+            }
+            
+            // Cache the result
+            if (!_pathProcessingCache.TryGetValue(extractorKey, out pathCache))
+            {
+                pathCache = new Dictionary<string, bool>(StringComparer.Ordinal);
+                _pathProcessingCache[extractorKey] = pathCache;
+            }
+            
+            pathCache[assetPath] = result;
+            
+            return result;
         }
 
         /// <summary>
@@ -171,6 +283,9 @@ namespace Translations
         /// </summary>
         private static bool CheckSourcesList(string assetPath, ExtractionSourcesList sources)
         {
+            if (sources == null || sources.Items.Count == 0)
+                return true;
+                
             foreach (var source in sources.Items)
             {
                 if (source.type == ExtractionSourceType.Folder)
@@ -215,42 +330,70 @@ namespace Translations
                 Debug.LogError("TranslationData asset is null");
                 return;
             }
+            
+            // Pre-load all language data assets to avoid repeated asset loading
+            var languageDataAssets = new Dictionary<string, LanguageData>(translationData.languageDataDictionary.Length);
+            for (int i = 0; i < translationData.languageDataDictionary.Length; i++)
+            {
+                var assetRef = translationData.languageDataDictionary[i];
+                string assetPath = AssetDatabase.GUIDToAssetPath(assetRef.AssetGUID);
+                LanguageData languageData = AssetDatabase.LoadAssetAtPath<LanguageData>(assetPath);
+                
+                if (languageData != null)
+                {
+                    languageDataAssets[assetRef.AssetGUID] = languageData;
+                }
+            }
 
             // For complete replacement, clear all data first
             if (updateMode == KeyUpdateMode.ReplaceCompletely)
             {
-                // Store extraction sources before clearing
-                var globalSources = TranslationMetaDataProvider.Metadata?.extractionSources;
-
-                // Clear all metadata except extraction sources
-                TranslationMetaDataProvider.Metadata?.ClearAllSources();
-                
-                // Restore extraction sources
-                if (TranslationMetaDataProvider.Metadata != null)
-                {
-                    TranslationMetaDataProvider.Metadata.extractionSources = globalSources ?? new List<ExtractionSource>();
-                }
-
                 // Clear all language data first
-                for (int i = 0; i < translationData.languageDataDictionary.Length; i++)
+                foreach (var languageData in languageDataAssets.Values)
                 {
-                    var assetRef = translationData.languageDataDictionary[i];
-                    string assetPath = AssetDatabase.GUIDToAssetPath(assetRef.AssetGUID);
-                    LanguageData languageData = AssetDatabase.LoadAssetAtPath<LanguageData>(assetPath);
-                    
-                    if (languageData != null)
-                    {
-                        languageData.allText.Clear();
-                        EditorUtility.SetDirty(languageData);
-                    }
+                    languageData.allText.Clear();
+                    EditorUtility.SetDirty(languageData);
                 }
 
                 // Clear main translation data
                 translationData.allKeys.Clear();
             }
-            else
+            else if (updateMode == KeyUpdateMode.ReplaceButPreserveMissing)
             {
+                // Keep track of keys to remove
+                var keysToRemove = new HashSet<string>(translationData.allKeys);
+                keysToRemove.ExceptWith(extractedText);
+                
                 // Clear metadata only for keys that will be removed
+                foreach (var key in keysToRemove)
+                {
+                    TranslationMetaDataProvider.Metadata?.ClearSources(key);
+                }
+                
+                // Remove keys from all language data and from the main data
+                foreach (var key in keysToRemove)
+                {
+                    int index = translationData.allKeys.IndexOf(key);
+                    if (index >= 0)
+                    {
+                        translationData.allKeys.RemoveAt(index);
+                        
+                        // Remove corresponding entries in all language data
+                        foreach (var languageData in languageDataAssets.Values)
+                        {
+                            if (index < languageData.allText.Count)
+                            {
+                                languageData.allText.RemoveAt(index);
+                                EditorUtility.SetDirty(languageData);
+                            }
+                        }
+                    }
+                }
+            }
+            else // KeyUpdateMode.Merge
+            {
+                // We don't need to do anything special here as we'll add the new keys below
+                // Just clear metadata for any keys that are no longer present
                 foreach (var key in translationData.allKeys)
                 {
                     if (!extractedText.Contains(key))
@@ -260,32 +403,33 @@ namespace Translations
                 }
             }
 
+            // Prepare sets to optimize contains checks
+            HashSet<string> existingKeys = new HashSet<string>(translationData.allKeys);
+            
             // Add new keys and their translations
             foreach (string text in extractedText)
             {
-                if (!translationData.allKeys.Contains(text))
+                if (!existingKeys.Contains(text))
                 {
                     translationData.allKeys.Add(text);
                     
                     // Add empty translations for each language
-                    for (int i = 0; i < translationData.languageDataDictionary.Length; i++)
+                    foreach (var languageData in languageDataAssets.Values)
                     {
-                        var assetRef = translationData.languageDataDictionary[i];
-                        string assetPath = AssetDatabase.GUIDToAssetPath(assetRef.AssetGUID);
-                        LanguageData languageData = AssetDatabase.LoadAssetAtPath<LanguageData>(assetPath);
-                        
-                        if (languageData != null)
-                        {
-                            languageData.allText.Add("");
-                            EditorUtility.SetDirty(languageData);
-                        }
+                        languageData.allText.Add("");
+                        EditorUtility.SetDirty(languageData);
                     }
                 }
             }
 
-            // Sort keys alphabetically
+            // Clear the path cache, as extraction sources may have changed
+            ClearPathProcessingCache();
+
+            // Sort keys alphabetically for better organization
             translationData.allKeys.Sort();
             EditorUtility.SetDirty(translationData);
+            
+            // Batch save assets for better performance
             AssetDatabase.SaveAssets();
         }
 
@@ -321,33 +465,55 @@ namespace Translations
         /// <summary>
         /// Extracts text from specific types of extractors.
         /// </summary>
+        /// <param name="translationData">The translation data to update</param>
         /// <param name="extractorTypes">The types of extractors to use.</param>
         /// <returns>A HashSet containing all extracted text.</returns>
-        public static HashSet<string> ExtractTextFromTypes(TranslationData translationData,params Type[] extractorTypes)
+        public static HashSet<string> ExtractTextFromTypes(TranslationData translationData, params Type[] extractorTypes)
         {
-            HashSet<string> extractedText = new HashSet<string>();
-            
-            foreach (var type in extractorTypes)
+            if (extractorTypes == null || extractorTypes.Length == 0)
             {
-                if (!typeof(ITextExtractor).IsAssignableFrom(type))
-                {
-                    Debug.LogError($"Type {type.Name} does not implement ITextExtractor");
-                    continue;
-                }
+                Debug.LogWarning("No extractor types specified, returning empty result");
+                return new HashSet<string>();
+            }
 
-                var extractor = _extractors.FirstOrDefault(e => e.GetType() == type);
-                if (extractor == null)
-                {
-                    Debug.LogError($"No extractor of type {type.Name} found");
-                    continue;
-                }
+            var extractedText = new HashSet<string>(StringComparer.Ordinal);
+            bool anyExtractorFound = false;
+            
+            // Get enabled extractors of the specified types
+            var targetExtractors = _extractors
+                .Where(e => extractorTypes.Contains(e.GetType()) && IsExtractorEnabled(e.GetType()))
+                .ToList();
 
-                try
+            if (targetExtractors.Count == 0)
+            {
+                Debug.LogWarning($"No enabled extractors found matching the specified types");
+                return extractedText;
+            }
+            
+            OnExtractionStarted?.Invoke();
+            ResetExtractionProgress();
+            
+            // Calculate per-extractor progress increment
+            float progressIncrement = 1.0f / targetExtractors.Count;
+            float currentProgress = 0f;
+            
+            // Process each extractor sequentially to avoid threading issues with Unity's API
+            foreach (var extractor in targetExtractors)
+            {
+                SetExtractionProgress(extractor, currentProgress);
+                UpdateExtractionProgressUI();
+                OnExtractorStarted?.Invoke(extractor);
+                currentProgress += progressIncrement;
+                
+                try 
                 {
-                    Metadata = TranslationMetaDataProvider.Metadata;
-                    OnExtractorStarted?.Invoke(extractor);
                     var newText = extractor.ExtractText(Metadata);
+                    
+                    // Check for similar texts
+                    TextSimilarityChecker.CheckForSimilarTexts(newText, $"extractor {extractor.GetType().Name}");
+                    
                     extractedText.UnionWith(newText);
+                    anyExtractorFound = true;
                     OnExtractorFinished?.Invoke(extractor);
                 }
                 catch (Exception e)
@@ -357,6 +523,17 @@ namespace Translations
                 }
             }
 
+            if (anyExtractorFound)
+            {
+                // Final check for similar texts across all extractors
+                TextSimilarityChecker.CheckForSimilarTexts(extractedText, "all extracted text");
+                OnExtractionComplete?.Invoke(extractedText);
+            }
+            
+            // Clear the progress bar when we're done
+            EditorUtility.ClearProgressBar();
+            ResetExtractionProgress();
+            
             return extractedText;
         }
     }

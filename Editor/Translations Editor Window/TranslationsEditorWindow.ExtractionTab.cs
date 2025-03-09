@@ -136,6 +136,9 @@ namespace Translations
                                         HandleExtractionComplete(extractedText);
                                         
                                         EditorUtility.SetDirty(translationData);
+                                        EditorUtility.SetDirty(TranslationMetaDataProvider.Metadata);
+
+                                        AssetDatabase.SaveAssets();
                                     }
                                 }
                             }
@@ -230,6 +233,9 @@ namespace Translations
                                 var extractedText = TextExtractor.ExtractAllText();
                                 TextExtractor.UpdateTranslationData(translationData, extractedText, updateMode);
                                 needsCoverageUpdate = true;
+                                EditorUtility.SetDirty(TranslationMetaDataProvider.Metadata);
+
+                                AssetDatabase.SaveAssets();
                             }
                         }
                     }

@@ -104,6 +104,7 @@ namespace Translations
         // Event handlers for TextExtractor
         private void HandleExtractionStarted()
         {
+            // Start the progress bar at 0%
             EditorUtility.DisplayProgressBar("Extracting Text", "Starting extraction...", 0f);
             TextExtractor.Metadata = translationMetadata;
 
@@ -111,6 +112,10 @@ namespace Translations
             previousKeys = new HashSet<string>(translationData.allKeys);
 
             translationMetadata.ClearTextStates();
+            if (updateMode == KeyUpdateMode.ReplaceCompletely)
+            {
+                translationMetadata?.ClearAllSources();
+            }
         }
 
         private void HandleExtractionComplete(HashSet<string> extractedText)
@@ -128,20 +133,8 @@ namespace Translations
                 }
             }
 
-            // Handle missing translations based on mode
-            if (updateMode == KeyUpdateMode.ReplaceButPreserveMissing)
-            {
-                // Keep track of missing translations that were removed
-                foreach (var oldKey in previousKeys)
-                {
-                    if (!extractedText.Contains(oldKey))
-                    {
-                        TranslationMetaDataProvider.Metadata.SetTextState(oldKey, TextState.Missing);
-                    }
-                }
-            }
-
             needsCoverageUpdate = true;
+            AssetDatabase.SaveAssets();
             Repaint();
         }
 
@@ -152,12 +145,25 @@ namespace Translations
 
         private void HandleExtractorStarted(ITextExtractor extractor)
         {
-            EditorUtility.DisplayProgressBar("Extracting Text", $"Running {extractor.GetType().Name}...", 0.5f);
+            // No need to update progress here, it's handled by TextExtractor's thread-safe system
+            // We're just using the event notification for logging purposes now
         }
 
         private void HandleExtractorFinished(ITextExtractor extractor)
         {
-            // Could be used for progress tracking if needed
+            // No need to update progress here, it's handled by TextExtractor's thread-safe system
+            // We're just using the event notification for logging purposes now
+        }
+
+        // Add update method to check for extraction progress
+        private void Update()
+        {
+            // Check if extraction is running and update progress UI if needed
+            if (TextExtractor.IsExtractionRunning)
+            {
+                TextExtractor.UpdateExtractionProgressUI();
+                Repaint(); // Force window repaint to update any UI changes
+            }
         }
 
         private void LoadEditorPrefs()

@@ -1,0 +1,21 @@
+{
+  "name": "com.flamboozle.translations-done-right",
+  "version": "1.0.0",
+  "displayName": "Translations Done Right",
+  "description": "A powerful localization and translations management system for Unity with intelligent text similarity detection, automated extraction, and comprehensive editor tools.",
+  "unity": "2020.3",
+  "dependencies": {
+    "com.unity.textmeshpro": "3.0.6",
+    "com.unity.addressables": "1.21.10"
+  },
+  "keywords": [
+    "localization",
+    "translations",
+    "i18n",
+    "text",
+    "language"
+  ],
+  "author": {
+    "name": "Flamboozle"
+  }
+} 

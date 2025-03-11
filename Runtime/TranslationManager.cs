@@ -81,20 +81,76 @@ namespace Translations
 
         public static string Translate(string originalText)
         {
+            if (string.IsNullOrEmpty(originalText))
+                return originalText;
+                
             // First check if this text has a canonical version
-            string textToTranslate = TranslationData.GetCanonicalText(originalText);
-
+            string canonicalText = TranslationData.GetCanonicalText(originalText);
+            
+            // Use the full text (with disambiguation) for lookup in the translation dictionary
+            string lookupKey = canonicalText;
+            
+            // If we're already in the default language, strip the disambiguation part
             if (currentLanguage == TranslationData.defaultLanguage)
-                return textToTranslate;
+            {
+                // Parse and remove the disambiguation suffix if present
+                int pipeIndex = canonicalText.IndexOf('|');
+                if (pipeIndex > 0 && pipeIndex < canonicalText.Length - 1)
+                {
+                    // Return only the base word without the disambiguation
+                    return canonicalText.Substring(0, pipeIndex);
+                }
+                
+                // No disambiguation, return as is
+                return canonicalText;
+            }
 
-            if (translations.TryGetValue(textToTranslate, out var translatedText))
+            // Look up the translation using the full key (with disambiguation)
+            if (translations.TryGetValue(lookupKey, out var translatedText))
             {
                 return translatedText;
             }
 
-            // If no translation found, use the canonical text
-            return textToTranslate;
+            // If no translation found, use the canonical text but with disambiguation removed
+            int disambiguationIndex = canonicalText.IndexOf('|');
+            if (disambiguationIndex > 0 && disambiguationIndex < canonicalText.Length - 1)
+            {
+                return canonicalText.Substring(0, disambiguationIndex);
+            }
+            
+            // No disambiguation, return as is
+            return canonicalText;
         }
+
+        /// <summary>
+        /// Translates a smart string with placeholders and replaces the placeholders with provided values
+        /// </summary>
+        /// <param name="smartText">The smart string with placeholders like {var:format:options}</param>
+        /// <param name="args">Dictionary of arguments to replace placeholders</param>
+        /// <returns>Translated and formatted text</returns>
+        public static string TranslateSmart(string smartText, IDictionary<string, object> args = null)
+        {
+            if (string.IsNullOrEmpty(smartText))
+                return smartText;
+
+            // Extract placeholders to ensure they don't get translated
+            var (tokenizedText, placeholders) = SmartString.ExtractPlaceholders(smartText);
+            
+            // Translate the tokenized text
+            string translatedTokenized = Translate(tokenizedText);
+            
+            // Restore placeholders in the translated text
+            string translatedWithPlaceholders = SmartString.RestorePlaceholders(translatedTokenized, placeholders);
+            
+            // Format the translated text with the provided arguments
+            if (args != null && args.Count > 0)
+            {
+                return SmartString.Format(translatedWithPlaceholders, args);
+            }
+            
+            return translatedWithPlaceholders;
+        }
+
         private static string ProcessTranslationKeyReferences(string text, HashSet<string> processedKeys, int depth = 0)
         {
             if (depth > 10)
@@ -207,6 +263,65 @@ namespace Translations
                     onComplete?.Invoke(null);
                 }
             };
+        }
+
+        /// <summary>
+        /// Extension method to easily format a string for a specific context
+        /// </summary>
+        /// <param name="text">The base text</param>
+        /// <param name="context">The disambiguation context (e.g., "verb", "noun", or a numeric identifier like "1", "2", etc.)</param>
+        /// <returns>A formatted text with disambiguation markers</returns>
+        public static string ForContext(this string text, string context)
+        {
+            if (string.IsNullOrEmpty(text) || string.IsNullOrEmpty(context))
+                return text;
+                
+            return $"{text}|{context}";
+        }
+        
+        /// <summary>
+        /// Formats a string for disambiguation with a specific meaning context
+        /// </summary>
+        /// <param name="text">The base text</param>
+        /// <param name="context">The disambiguation context (e.g., "verb", "noun", or a numeric identifier like "1", "2", etc.)</param>
+        /// <returns>A formatted text with disambiguation markers</returns>
+        public static string WithContext(string text, string context)
+        {
+            return ForContext(text, context);
+        }
+        
+        /// <summary>
+        /// Gets the base text from a potentially disambiguated term
+        /// </summary>
+        /// <param name="text">The possibly disambiguated text</param>
+        /// <returns>The base text without disambiguation markers</returns>
+        public static string GetBaseText(string text)
+        {
+            if (string.IsNullOrEmpty(text))
+                return text;
+                
+            int pipeIndex = text.IndexOf('|');
+            if (pipeIndex > 0)
+                return text.Substring(0, pipeIndex);
+                
+            return text;
+        }
+        
+        /// <summary>
+        /// Gets the context from a disambiguated term
+        /// </summary>
+        /// <param name="text">The possibly disambiguated text</param>
+        /// <returns>The context, or null if no context is present</returns>
+        public static string GetContext(string text)
+        {
+            if (string.IsNullOrEmpty(text))
+                return null;
+                
+            int pipeIndex = text.IndexOf('|');
+            if (pipeIndex > 0 && pipeIndex < text.Length - 1)
+                return text.Substring(pipeIndex + 1);
+                
+            return null;
         }
     }
 }

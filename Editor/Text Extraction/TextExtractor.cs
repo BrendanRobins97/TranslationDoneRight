@@ -432,6 +432,28 @@ namespace Translations
             // Batch save assets for better performance
             AssetDatabase.SaveAssets();
         }
+        
+        /// <summary>
+        /// Parses a potentially disambiguated term in the format "Word|context"
+        /// </summary>
+        /// <param name="original">The original term which may contain disambiguation</param>
+        /// <param name="baseText">The base text without disambiguation</param>
+        /// <param name="context">The extracted context, or null if none</param>
+        private static void ParseDisambiguatedTerm(string original, out string baseText, out string context)
+        {
+            baseText = original;
+            context = null;
+            
+            if (string.IsNullOrEmpty(original))
+                return;
+                
+            int pipeIndex = original.IndexOf('|');
+            if (pipeIndex > 0 && pipeIndex < original.Length - 1)
+            {
+                baseText = original.Substring(0, pipeIndex);
+                context = original.Substring(pipeIndex + 1);
+            }
+        }
 
         /// <summary>
         /// Extracts text from a specific type of extractor.

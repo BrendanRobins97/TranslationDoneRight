@@ -12,7 +12,7 @@ namespace Translations.Examples
         public string chestName = "Ancient Dragon Hoard";
         public string chestDescription = "A weathered chest adorned with dragon scales. Legends say it contains treasures beyond imagination... or just some rusty equipment.";
         public string chestInteractionPrompt = "Press E to open";
-        
+
         // UI References
         [SerializeField] private TextMeshProUGUI nameText;
         [SerializeField] private TextMeshProUGUI descriptionText;
@@ -79,7 +79,9 @@ namespace Translations.Examples
             
             if (interactionPromptText != null)
             {
-                interactionPromptText.SetTextTranslated("{0} {1}", chestInteractionPrompt, chestName);
+                interactionPromptText.SetTextTranslated("{0} {1} test|123", chestInteractionPrompt, chestName);
+                interactionPromptText.SetTextTranslated("{0} {1} test|124", chestInteractionPrompt, chestName);
+
             }
         }
         

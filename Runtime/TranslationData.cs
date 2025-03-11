@@ -111,28 +111,6 @@ namespace Translations
             }
         }
 
-        public string GetKeyContext(string key)
-        {
-            return keyContexts.TryGetValue(key, out var context) ? context : string.Empty;
-        }
-
-        public void SetKeyContext(string key, string context)
-        {
-            if (allKeys.Contains(key))
-            {
-                if (string.IsNullOrEmpty(context))
-                {
-                    keyContexts.Remove(key);
-                }
-                else
-                {
-                    keyContexts[key] = context;
-                }
-            }
-        }
-
-        public bool showCategoryManagement = false;
-
         public (string selectedText, bool isAccepted) GetGroupStatus(IEnumerable<string> groupTexts)
         {
             string groupKey = string.Join("|", groupTexts.OrderBy(t => t));

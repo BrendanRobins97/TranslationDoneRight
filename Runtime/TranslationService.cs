@@ -13,10 +13,11 @@ namespace Translations
         private static Dictionary<TextMeshProUGUI, string> originalTexts = new Dictionary<TextMeshProUGUI, string>();
         private static Dictionary<TextMeshProUGUI, TMP_FontAsset> originalFonts = new Dictionary<TextMeshProUGUI, TMP_FontAsset>();
         private static bool isInitialized = false;
-
+        
         /// <summary>
         /// Initialize the translation service. Call this at application startup.
         /// </summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         public static void Initialize()
         {
             if (isInitialized) return;
@@ -30,11 +31,6 @@ namespace Translations
         {
             StoreOriginalTexts();
             UpdateAllTexts();
-        }
-
-        public static void ChangeLanguage(string language)
-        {
-            TranslationManager.ChangeLanguage(language);
         }
 
         private static void StoreOriginalTexts()

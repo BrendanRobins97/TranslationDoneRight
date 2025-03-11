@@ -1802,7 +1802,7 @@ namespace Translations
                             : "";
                             string assetPath = AssetDatabase.GUIDToAssetPath(assetRef.AssetGUID);
                         LanguageData languageData = AssetDatabase.LoadAssetAtPath<LanguageData>(assetPath);
-                        TranslateSingleField(textToTranslate, language, i, languageData);
+                        TranslateSingleField(textToTranslate, language, languageData);
                     }
                 }
 

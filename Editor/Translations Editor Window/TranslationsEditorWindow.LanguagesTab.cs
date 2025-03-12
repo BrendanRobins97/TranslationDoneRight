@@ -582,8 +582,10 @@ namespace Translations
             EditorUtility.SetDirty(translationData);
             AssetDatabase.SaveAssets();
             needsCoverageUpdate = true;
-            UpdateLanguageDataDictionary();
+            
+            // Fix: First verify/create the assets, then update the dictionary
             VerifyAddressableAssets();
+            UpdateLanguageDataDictionary();
         }
 
         private void AddNewLanguage(string language)

@@ -419,6 +419,16 @@ namespace Translations
             return rows;
         }
 
+        public void AddLanguage(string language)
+        {
+            if (!supportedLanguages.Contains(language)) 
+            {
+                supportedLanguages.Add(language);
+                AddLanguageToFonts(language);
+                Debug.Log($"Added language: {language}");
+            }
+        }
+
         public void AddFont(TMP_FontAsset font)
         {
             fonts ??= new SerializableDictionary<TMP_FontAsset, SerializableDictionary<string, TMP_FontAsset>>();

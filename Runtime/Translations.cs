@@ -12,6 +12,11 @@ namespace Translations
             return TranslationManager.Translate(text);
         }
 
+        public static string SmartTranslate(this string text)
+        {
+            return TranslationManager.TranslateSmart(text);
+        }
+
         public static string Format(string format, params object[] args)
         {
             // Translate the format string

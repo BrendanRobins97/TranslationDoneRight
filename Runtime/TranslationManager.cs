@@ -151,58 +151,6 @@ namespace Translations
             return translatedWithPlaceholders;
         }
 
-        private static string ProcessTranslationKeyReferences(string text, HashSet<string> processedKeys, int depth = 0)
-        {
-            if (depth > 10)
-            {
-                Debug.LogError("Translation key reference depth exceeded (possible circular reference)");
-                return text;
-            }
-
-            var keyRefRegex = new Regex(@"\{@([^}]+)\}");
-            var matches = keyRefRegex.Matches(text);
-            
-            if (matches.Count == 0)
-                return text;
-
-            string result = text;
-            foreach (Match match in matches)
-            {
-                string key = match.Groups[1].Value;
-                
-                // Prevent circular references
-                if (processedKeys.Contains(key))
-                {
-                    Debug.LogError($"Circular reference detected in translation key: {key}");
-                    continue;
-                }
-
-                processedKeys.Add(key);
-                
-                // Get the translation for the referenced key
-                string translatedValue = Translate(key);
-                
-                // Process any nested key references in the translated value
-                translatedValue = ProcessTranslationKeyReferences(translatedValue, processedKeys, depth + 1);
-                
-                result = result.Replace(match.Value, translatedValue);
-                
-                processedKeys.Remove(key);
-            }
-
-            return result;
-        }
-
-        public static TMP_FontAsset GetFontForText(TMP_FontAsset defaultFont)
-        {
-            if (TranslationData.fonts.TryGetValue(defaultFont, out SerializableDictionary<string, TMP_FontAsset> fontDictionary)
-                && fontDictionary.TryGetValue(currentLanguage, out TMP_FontAsset font))
-            {
-                return font;
-            }
-            return defaultFont;
-        }
-
         private static void UnloadCurrentLanguage()
         {
             if (currentLanguageAssetRef != null)
@@ -263,65 +211,6 @@ namespace Translations
                     onComplete?.Invoke(null);
                 }
             };
-        }
-
-        /// <summary>
-        /// Extension method to easily format a string for a specific context
-        /// </summary>
-        /// <param name="text">The base text</param>
-        /// <param name="context">The disambiguation context (e.g., "verb", "noun", or a numeric identifier like "1", "2", etc.)</param>
-        /// <returns>A formatted text with disambiguation markers</returns>
-        public static string ForContext(this string text, string context)
-        {
-            if (string.IsNullOrEmpty(text) || string.IsNullOrEmpty(context))
-                return text;
-                
-            return $"{text}|{context}";
-        }
-        
-        /// <summary>
-        /// Formats a string for disambiguation with a specific meaning context
-        /// </summary>
-        /// <param name="text">The base text</param>
-        /// <param name="context">The disambiguation context (e.g., "verb", "noun", or a numeric identifier like "1", "2", etc.)</param>
-        /// <returns>A formatted text with disambiguation markers</returns>
-        public static string WithContext(string text, string context)
-        {
-            return ForContext(text, context);
-        }
-        
-        /// <summary>
-        /// Gets the base text from a potentially disambiguated term
-        /// </summary>
-        /// <param name="text">The possibly disambiguated text</param>
-        /// <returns>The base text without disambiguation markers</returns>
-        public static string GetBaseText(string text)
-        {
-            if (string.IsNullOrEmpty(text))
-                return text;
-                
-            int pipeIndex = text.IndexOf('|');
-            if (pipeIndex > 0)
-                return text.Substring(0, pipeIndex);
-                
-            return text;
-        }
-        
-        /// <summary>
-        /// Gets the context from a disambiguated term
-        /// </summary>
-        /// <param name="text">The possibly disambiguated text</param>
-        /// <returns>The context, or null if no context is present</returns>
-        public static string GetContext(string text)
-        {
-            if (string.IsNullOrEmpty(text))
-                return null;
-                
-            int pipeIndex = text.IndexOf('|');
-            if (pipeIndex > 0 && pipeIndex < text.Length - 1)
-                return text.Substring(pipeIndex + 1);
-                
-            return null;
         }
     }
 }

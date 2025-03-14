@@ -1,11 +1,19 @@
 using UnityEngine;
 using System.Collections.Generic;
+using TMPro;
 
 namespace Translations.Examples
 {
     [Translated] // Extract all string fields from this class and its nested types
     public class QuestDatabase : MonoBehaviour
     {
+
+        private void Start()
+        {
+            GetComponent<TextMeshProUGUI>().SetTextTranslated("Testset");
+
+            Debug.Log("Test Cutscene Dialogue".TranslateString());
+        }
         [SerializeField]
         private QuestDefinition mainQuest = new QuestDefinition(){
             questID = "main_quest_1",

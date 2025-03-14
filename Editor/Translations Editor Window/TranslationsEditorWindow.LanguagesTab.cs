@@ -34,6 +34,7 @@ namespace Translations
 
         private ReorderableList languageList;
         private Vector2 languageScrollPosition;
+        private string currentSelectedLanguage;
 
         private void InitializeLanguageList()
         {
@@ -178,6 +179,54 @@ namespace Translations
             if (needsCoverageUpdate)
             {
                 UpdateCoverageData();
+            }
+            
+            // Editor-only language selector
+            if (translationData.supportedLanguages.Count > 0)
+            {
+                EditorGUILayout.Space(5);
+                
+                using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
+                {
+                    EditorGUILayout.LabelField("Editor Language Preview", EditorStyles.boldLabel);
+                    EditorGUILayout.Space(5);
+                    
+                    // Cache the current language in editor
+                    if (string.IsNullOrEmpty(currentSelectedLanguage))
+                    {
+                        currentSelectedLanguage = PlayerPrefs.GetString("Language", translationData.defaultLanguage);
+                    }
+                    
+                    EditorGUILayout.BeginHorizontal();
+                    
+                    // Dropdown to select language
+                    EditorGUILayout.LabelField("Change Language:", GUILayout.Width(120));
+                    
+                    int currentIndex = translationData.supportedLanguages.IndexOf(currentSelectedLanguage);
+                    if (currentIndex < 0) currentIndex = 0;
+                    
+                    int newIndex = EditorGUILayout.Popup(currentIndex, translationData.supportedLanguages.ToArray(), GUILayout.Width(200));
+                    
+                    if (newIndex != currentIndex)
+                    {
+                        string newLanguage = translationData.supportedLanguages[newIndex];
+                        PlayerPrefs.SetString("Language", newLanguage);
+                        PlayerPrefs.Save();
+                        currentSelectedLanguage = newLanguage;
+                        
+                        // Trigger language change event if needed (this would update any previews or tests in the Editor)
+                        TranslationManager.ChangeLanguage(newLanguage);
+                        
+                        // Repaint any game view to reflect language changes
+                        UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
+                    }
+                    
+                    EditorGUILayout.EndHorizontal();
+                    
+                    EditorGUILayout.Space(2);
+                }
+                
+                EditorGUILayout.Space(10);
             }
 
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))

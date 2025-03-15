@@ -124,6 +124,10 @@ namespace Translations
         [SerializeField]
         public SerializableDictionary<string, ExtractionSourcesList> extractorSources = new SerializableDictionary<string, ExtractionSourcesList>();
         
+        // List of manually specified scene paths for the Scene extractor when using Manual mode
+        [SerializeField]
+        public List<string> manualScenePaths = new List<string>();
+        
         public void UpdateTextCategory(string key, string oldCategory, string newCategory)
         {
             if (textCategories.ContainsKey(key))
@@ -156,7 +160,27 @@ namespace Translations
             {
                 textSources[text] = new TextSourceInfoList();
             }
-            textSources[text].Items.Add(sourceInfo);
+            
+            // Check if this exact source already exists to avoid duplicates
+            bool sourceExists = false;
+            foreach (var existingSource in textSources[text].Items)
+            {
+                if (existingSource.sourceType == sourceInfo.sourceType &&
+                    existingSource.sourcePath == sourceInfo.sourcePath &&
+                    existingSource.objectPath == sourceInfo.objectPath &&
+                    existingSource.componentName == sourceInfo.componentName &&
+                    existingSource.fieldName == sourceInfo.fieldName)
+                {
+                    sourceExists = true;
+                    break;
+                }
+            }
+            
+            // Only add if it doesn't already exist
+            if (!sourceExists)
+            {
+                textSources[text].Items.Add(sourceInfo);
+            }
 
             // Initialize context if it doesn't exist
             if (!textContexts.ContainsKey(text))

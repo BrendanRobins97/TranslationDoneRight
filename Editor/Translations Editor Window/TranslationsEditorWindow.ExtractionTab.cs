@@ -122,6 +122,9 @@ namespace Translations
                                         $"This will extract text using only the {extractor.SourceType} extractor and merge it with existing translation keys. Continue?", 
                                         "Extract", "Cancel"))
                                     {
+                                        var previousUpdateMode = updateMode;
+                                        updateMode = KeyUpdateMode.Merge;
+
                                         HandleExtractionStarted();
                                         // Save the current keys before extraction
                                         previousKeys = new HashSet<string>(translationData.allKeys);
@@ -139,6 +142,8 @@ namespace Translations
                                         EditorUtility.SetDirty(TranslationMetaDataProvider.Metadata);
 
                                         AssetDatabase.SaveAssets();
+
+                                        updateMode = previousUpdateMode;
                                     }
                                 }
                             }
@@ -155,6 +160,13 @@ namespace Translations
                         if (isEnabled)
                         {
                             EditorGUILayout.LabelField(extractor.Description, EditorStyles.miniLabel);
+                            
+                            // Draw custom inspector GUI if the extractor implements it
+                            EditorGUILayout.Space(5);
+                            if (extractor.DrawCustomInspectorGUI())
+                            {
+                                EditorUtility.SetDirty(TranslationMetaDataProvider.Metadata);
+                            }
                             
                             // Extractor-specific sources
                             string extractorName = extractorType.Name;

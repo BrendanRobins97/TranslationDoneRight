@@ -390,18 +390,6 @@ namespace Translations
                     }
                 }
             }
-            else // KeyUpdateMode.Merge
-            {
-                // We don't need to do anything special here as we'll add the new keys below
-                // Just clear metadata for any keys that are no longer present
-                foreach (var key in translationData.allKeys)
-                {
-                    if (!extractedText.Contains(key))
-                    {
-                        TranslationMetaDataProvider.Metadata?.ClearSources(key);
-                    }
-                }
-            }
 
             // Prepare sets to optimize contains checks
             HashSet<string> existingKeys = new HashSet<string>(translationData.allKeys);

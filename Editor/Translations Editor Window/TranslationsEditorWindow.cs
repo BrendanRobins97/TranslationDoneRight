@@ -111,26 +111,47 @@ namespace Translations
             // Store current keys for comparison
             previousKeys = new HashSet<string>(translationData.allKeys);
 
+            // Clear text states but preserve sources except in complete replacement mode
             translationMetadata.ClearTextStates();
+            
+            // Only clear all sources when we're doing a complete replacement
             if (updateMode == KeyUpdateMode.ReplaceCompletely)
             {
                 translationMetadata?.ClearAllSources();
             }
+            // We'll let the TextExtractor.UpdateTranslationData method handle individual sources
         }
 
         private void HandleExtractionComplete(HashSet<string> extractedText)
         {
             EditorUtility.ClearProgressBar();
 
-            // Mark new text in all modes
-            foreach (var text in extractedText)
+            // Handle text states based on update mode
+            switch (updateMode)
             {
-                if (updateMode == KeyUpdateMode.ReplaceCompletely || !previousKeys.Contains(text))
-                {
-                    TranslationMetaDataProvider.Metadata.SetTextState(text, TextState.New);
-                } else {
-                    TranslationMetaDataProvider.Metadata.SetTextState(text, TextState.Recent);
-                }
+                case KeyUpdateMode.ReplaceCompletely:
+                    // All text is new in complete replacement mode
+                    foreach (var text in extractedText)
+                    {
+                        TranslationMetaDataProvider.Metadata.SetTextState(text, TextState.New);
+                    }
+                    break;
+
+                case KeyUpdateMode.ReplaceButPreserveMissing:
+                case KeyUpdateMode.Merge:
+                    // Mark text as new or recent based on whether it existed before
+                    foreach (var text in extractedText)
+                    {
+                        if (!previousKeys.Contains(text))
+                        {
+                            TranslationMetaDataProvider.Metadata.SetTextState(text, TextState.New);
+                        }
+                        else
+                        {
+                            TranslationMetaDataProvider.Metadata.SetTextState(text, TextState.Recent);
+                        }
+                    }
+                    break;
             }
 
             needsCoverageUpdate = true;

@@ -33,6 +33,12 @@ namespace Translations
         /// Gets a description of what this extractor does
         /// </summary>
         string Description { get; }
+        
+        /// <summary>
+        /// Draws custom inspector GUI for this extractor if needed
+        /// </summary>
+        /// <returns>True if any changes were made that require saving, false otherwise</returns>
+        bool DrawCustomInspectorGUI() => false;
 
         /// <summary>
         /// Gets the relevant sources for this extractor

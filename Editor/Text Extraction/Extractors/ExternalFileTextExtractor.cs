@@ -118,6 +118,8 @@ namespace Translations
         private void ProcessDefaultPaths(HashSet<string> extractedText, TranslationMetadata metadata)
         {
             HashSet<string> filesToProcess = new HashSet<string>();
+            float pathProgress = 0f;
+            float pathIncrement = 1f / DefaultSearchPaths.Length;
             
             foreach (string basePath in DefaultSearchPaths)
             {
@@ -131,14 +133,19 @@ namespace Translations
                 {
                     filesToProcess.Add(file);
                 }
+                
+                pathProgress += pathIncrement;
+                ITextExtractor.ReportProgress(this, pathProgress * 0.1f); // First 10% for finding files
             }
 
-            ProcessFiles(filesToProcess, extractedText, metadata);
+            ProcessFiles(filesToProcess, extractedText, metadata, 0.1f); // Remaining 90% for processing
         }
         
         private void ProcessSourceList(ExtractionSourcesList sources, HashSet<string> extractedText, TranslationMetadata metadata)
         {
             HashSet<string> filesToProcess = new HashSet<string>();
+            float sourceProgress = 0f;
+            float sourceIncrement = 1f / sources.Items.Count;
             
             foreach (var source in sources.Items)
             {
@@ -171,12 +178,15 @@ namespace Translations
                         filesToProcess.Add(assetPath);
                     }
                 }
+                
+                sourceProgress += sourceIncrement;
+                ITextExtractor.ReportProgress(this, sourceProgress * 0.1f); // First 10% for finding files
             }
             
-            ProcessFiles(filesToProcess, extractedText, metadata);
+            ProcessFiles(filesToProcess, extractedText, metadata, 0.1f); // Remaining 90% for processing
         }
         
-        private void ProcessFiles(IEnumerable<string> filePaths, HashSet<string> extractedText, TranslationMetadata metadata)
+        private void ProcessFiles(IEnumerable<string> filePaths, HashSet<string> extractedText, TranslationMetadata metadata, float progressOffset = 0f)
         {
             // Convert to list for easier processing
             var fileList = filePaths.ToList();
@@ -188,6 +198,9 @@ namespace Translations
             
             // Process files in sequential batches to avoid UI thread issues
             int batchSize = 20; // Process 20 files at a time
+            float batchIncrement = (1f - progressOffset) / ((fileList.Count + batchSize - 1) / batchSize);
+            float currentProgress = progressOffset;
+            
             for (int startIndex = 0; startIndex < fileList.Count; startIndex += batchSize)
             {
                 int endIndex = Math.Min(startIndex + batchSize, fileList.Count);
@@ -216,6 +229,9 @@ namespace Translations
                         localSourceInfos[filePath] = fileLocalSourceInfos;
                     }
                 }
+                
+                currentProgress += batchIncrement;
+                ITextExtractor.ReportProgress(this, currentProgress);
             }
             
             // Merge all results on main thread

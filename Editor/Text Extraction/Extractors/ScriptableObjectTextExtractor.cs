@@ -35,6 +35,10 @@ namespace Translations
         
         private void ProcessSourceList(ExtractionSourcesList sources, HashSet<string> extractedText, TranslationMetadata metadata)
         {
+            float sourceProgress = 0f;
+            float sourceIncrement = 1f / sources.Items.Count;
+            var allGuids = new List<string>();
+
             foreach (var source in sources.Items)
             {
                 string searchFolder = source.type == ExtractionSourceType.Folder ? source.folderPath : System.IO.Path.GetDirectoryName(AssetDatabase.GetAssetPath(source.asset));
@@ -47,12 +51,20 @@ namespace Translations
                     searchFolder = "Assets/" + searchFolder;
                 
                 string[] guids = AssetDatabase.FindAssets("t:ScriptableObject", new[] { searchFolder });
-                ProcessScriptableObjects(guids, extractedText, metadata);
+                allGuids.AddRange(guids);
+                
+                sourceProgress += sourceIncrement;
+                ITextExtractor.ReportProgress(this, sourceProgress * 0.1f); // First 10% for finding scriptable objects
             }
+
+            ProcessScriptableObjects(allGuids.ToArray(), extractedText, metadata, 0.1f); // Remaining 90% for processing
         }
         
-        private void ProcessScriptableObjects(string[] guids, HashSet<string> extractedText, TranslationMetadata metadata)
+        private void ProcessScriptableObjects(string[] guids, HashSet<string> extractedText, TranslationMetadata metadata, float progressOffset = 0f)
         {
+            float progressIncrement = (1f - progressOffset) / (guids.Length > 0 ? guids.Length : 1);
+            float currentProgress = progressOffset;
+
             foreach (string guid in guids)
             {
                 string path = AssetDatabase.GUIDToAssetPath(guid);
@@ -67,6 +79,9 @@ namespace Translations
                         path,
                         sourceType: TextSourceType.ScriptableObject);
                 }
+
+                currentProgress += progressIncrement;
+                ITextExtractor.ReportProgress(this, currentProgress);
             }
         }
     }

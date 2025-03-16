@@ -64,72 +64,53 @@ namespace Translations
                 metadata,
                 () => {
                     // Process scenes based on the selected source type
-                    switch (SceneSource)
-                    {
-                        case SceneSourceType.SceneSettings:
-                            // Process all scenes from build settings (default behavior)
-                            ProcessScenes(EditorBuildSettings.scenes, extractedText, metadata);
-                            break;
-                        case SceneSourceType.Addressables:
-                            // Process scenes from Addressables
-                            ProcessAddressableScenes(extractedText, metadata);
-                            break;
-                        case SceneSourceType.Manual:
-                            // Process manually specified scenes (stored in metadata)
-                            ProcessManualScenes(extractedText, metadata);
-                            break;
-                    }
+                    ProcessScenesBasedOnSourceType(extractedText, metadata);
                     return extractedText;
                 },
                 (sources) => {
-                    // Process only scenes within specified sources
-                    ProcessScenesBySource(sources, extractedText, metadata);
+                    // Even with specific sources, we should respect the SceneSource setting
+                    if (SceneSource == SceneSourceType.SceneSettings)
+                    {
+                        // Only process scenes that are both in build settings and in the specified sources
+                        var buildScenes = new HashSet<string>(EditorBuildSettings.scenes.Select(s => s.path));
+                        ProcessScenesBySource(sources, extractedText, metadata, buildScenes);
+                    }
+                    else if (SceneSource == SceneSourceType.Addressables)
+                    {
+                        // Only process scenes that are both addressable and in the specified sources
+                        var settings = AddressableAssetSettingsDefaultObject.Settings;
+                        var addressableScenes = settings?.groups
+                            .Where(g => g != null)
+                            .SelectMany(g => g.entries)
+                            .Where(e => e != null && e.AssetPath.EndsWith(".unity"))
+                            .Select(e => e.AssetPath)
+                            .ToHashSet() ?? new HashSet<string>();
+                        ProcessScenesBySource(sources, extractedText, metadata, addressableScenes);
+                    }
+                    else if (SceneSource == SceneSourceType.Manual)
+                    {
+                        // Only process scenes that are both manually specified and in the specified sources
+                        var manualScenes = new HashSet<string>(metadata.manualScenePaths ?? new List<string>());
+                        ProcessScenesBySource(sources, extractedText, metadata, manualScenes);
+                    }
                     return extractedText;
                 }
             );
         }
         
-        private void ProcessScenesBySource(ExtractionSourcesList sources, HashSet<string> extractedText, TranslationMetadata metadata)
+        private void ProcessScenesBasedOnSourceType(HashSet<string> extractedText, TranslationMetadata metadata)
         {
-            float sourceProgress = 0f;
-            float sourceIncrement = 1f / sources.Items.Count;
-
-            foreach (var source in sources.Items)
+            switch (SceneSource)
             {
-                if (source.type == ExtractionSourceType.Asset && source.asset != null)
-                {
-                    // If it's a direct scene asset
-                    string scenePath = AssetDatabase.GetAssetPath(source.asset);
-                    if (scenePath.EndsWith(".unity"))
-                    {
-                        ProcessScene(scenePath, extractedText, metadata);
-                    }
-                }
-                else if (source.type == ExtractionSourceType.Folder)
-                {
-                    // Search for scenes in folder
-                    string searchFolder = source.folderPath;
-                    if (string.IsNullOrEmpty(searchFolder)) continue;
-                    
-                    // Normalize path
-                    searchFolder = searchFolder.Replace('\\', '/').TrimStart('/');
-                    if (!searchFolder.StartsWith("Assets/"))
-                        searchFolder = "Assets/" + searchFolder;
-                    
-                    string[] sceneGuids = AssetDatabase.FindAssets("t:Scene", new[] { searchFolder });
-                    float sceneIncrement = sourceIncrement / (sceneGuids.Length > 0 ? sceneGuids.Length : 1);
-                    float sceneProgress = 0f;
-                    
-                    foreach (string guid in sceneGuids)
-                    {
-                        string scenePath = AssetDatabase.GUIDToAssetPath(guid);
-                        ProcessScene(scenePath, extractedText, metadata);
-                        sceneProgress += sceneIncrement;
-                        ITextExtractor.ReportProgress(this, sourceProgress + sceneProgress);
-                    }
-                }
-                sourceProgress += sourceIncrement;
-                ITextExtractor.ReportProgress(this, sourceProgress);
+                case SceneSourceType.SceneSettings:
+                    ProcessScenes(EditorBuildSettings.scenes, extractedText, metadata);
+                    break;
+                case SceneSourceType.Addressables:
+                    ProcessAddressableScenes(extractedText, metadata);
+                    break;
+                case SceneSourceType.Manual:
+                    ProcessManualScenes(extractedText, metadata);
+                    break;
             }
         }
         
@@ -389,6 +370,60 @@ namespace Translations
                 }
                 progress += sceneIncrement;
                 ITextExtractor.ReportProgress(this, progress);
+            }
+        }
+
+        private void ProcessScenesBySource(ExtractionSourcesList sources, HashSet<string> extractedText, TranslationMetadata metadata, HashSet<string> allowedScenes = null)
+        {
+            float sourceProgress = 0f;
+            float sourceIncrement = 1f / sources.Items.Count;
+
+            foreach (var source in sources.Items)
+            {
+                if (source.type == ExtractionSourceType.Asset && source.asset != null)
+                {
+                    // If it's a direct scene asset
+                    string scenePath = AssetDatabase.GetAssetPath(source.asset);
+                    if (scenePath.EndsWith(".unity"))
+                    {
+                        // Only process if it's in the allowed scenes list (or if no list is provided)
+                        if (allowedScenes == null || allowedScenes.Contains(scenePath))
+                        {
+                            ProcessScene(scenePath, extractedText, metadata);
+                        }
+                    }
+                }
+                else if (source.type == ExtractionSourceType.Folder)
+                {
+                    // Search for scenes in folder
+                    string searchFolder = source.folderPath;
+                    if (string.IsNullOrEmpty(searchFolder)) continue;
+                    
+                    // Normalize path
+                    searchFolder = searchFolder.Replace('\\', '/').TrimStart('/');
+                    if (!searchFolder.StartsWith("Assets/"))
+                        searchFolder = "Assets/" + searchFolder;
+                    
+                    string[] sceneGuids = AssetDatabase.FindAssets("t:Scene", new[] { searchFolder });
+                    
+                    // Filter scenes based on allowed list
+                    var scenePaths = sceneGuids
+                        .Select(guid => AssetDatabase.GUIDToAssetPath(guid))
+                        .Where(path => allowedScenes == null || allowedScenes.Contains(path))
+                        .ToList();
+                    
+                    float sceneIncrement = sourceIncrement / (scenePaths.Count > 0 ? scenePaths.Count : 1);
+                    float sceneProgress = 0f;
+                    
+                    foreach (string scenePath in scenePaths)
+                    {
+                        ProcessScene(scenePath, extractedText, metadata);
+                        sceneProgress += sceneIncrement;
+                        ITextExtractor.ReportProgress(this, sourceProgress + sceneProgress);
+                    }
+                }
+                sourceProgress += sourceIncrement;
+                ITextExtractor.ReportProgress(this, sourceProgress);
             }
         }
 

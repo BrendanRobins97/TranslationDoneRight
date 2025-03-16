@@ -375,9 +375,9 @@ namespace Translations
 
         private void ProcessScenesBySource(ExtractionSourcesList sources, HashSet<string> extractedText, TranslationMetadata metadata, HashSet<string> allowedScenes = null)
         {
-            float sourceProgress = 0f;
-            float sourceIncrement = 1f / sources.Items.Count;
+            List<string> scenesToProcess = new List<string>();
 
+            // First find all scenes without reporting progress
             foreach (var source in sources.Items)
             {
                 if (source.type == ExtractionSourceType.Asset && source.asset != null)
@@ -389,7 +389,7 @@ namespace Translations
                         // Only process if it's in the allowed scenes list (or if no list is provided)
                         if (allowedScenes == null || allowedScenes.Contains(scenePath))
                         {
-                            ProcessScene(scenePath, extractedText, metadata);
+                            scenesToProcess.Add(scenePath);
                         }
                     }
                 }
@@ -412,18 +412,27 @@ namespace Translations
                         .Where(path => allowedScenes == null || allowedScenes.Contains(path))
                         .ToList();
                     
-                    float sceneIncrement = sourceIncrement / (scenePaths.Count > 0 ? scenePaths.Count : 1);
-                    float sceneProgress = 0f;
-                    
-                    foreach (string scenePath in scenePaths)
-                    {
-                        ProcessScene(scenePath, extractedText, metadata);
-                        sceneProgress += sceneIncrement;
-                        ITextExtractor.ReportProgress(this, sourceProgress + sceneProgress);
-                    }
+                    scenesToProcess.AddRange(scenePaths);
                 }
-                sourceProgress += sourceIncrement;
-                ITextExtractor.ReportProgress(this, sourceProgress);
+            }
+
+            // Process scenes and report progress
+            if (scenesToProcess.Count > 0)
+            {
+                float sceneIncrement = 1f / scenesToProcess.Count;
+                float progress = 0f;
+
+                foreach (string scenePath in scenesToProcess)
+                {
+                    ProcessScene(scenePath, extractedText, metadata);
+                    progress += sceneIncrement;
+                    ITextExtractor.ReportProgress(this, progress);
+                }
+            }
+            else
+            {
+                // If no scenes to process, report 100% completion
+                ITextExtractor.ReportProgress(this, 1f);
             }
         }
 

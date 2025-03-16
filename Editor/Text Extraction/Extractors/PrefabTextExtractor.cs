@@ -40,9 +40,8 @@ namespace Translations
         private void ProcessSourceList(List<ExtractionSource> sources, HashSet<string> extractedText, TranslationMetadata metadata)
         {
             var allPrefabGuids = new List<string>();
-            float sourceProgress = 0f;
-            float sourceIncrement = 1f / sources.Count;
 
+            // Find all prefabs without reporting progress
             foreach (var source in sources)
             {
                 string searchFolder = source.type == ExtractionSourceType.Folder ? source.folderPath : Path.GetDirectoryName(AssetDatabase.GetAssetPath(source.asset));
@@ -56,18 +55,22 @@ namespace Translations
                 
                 string[] prefabGuids = AssetDatabase.FindAssets("t:Prefab", new[] { searchFolder });
                 allPrefabGuids.AddRange(prefabGuids);
-                
-                sourceProgress += sourceIncrement;
-                ITextExtractor.ReportProgress(this, sourceProgress * 0.1f); // First 10% for finding prefabs
             }
 
-            ProcessPrefabs(allPrefabGuids.ToArray(), extractedText, metadata, 0.1f); // Remaining 90% for processing
+            // Process all found prefabs
+            ProcessPrefabs(allPrefabGuids.ToArray(), extractedText, metadata);
         }
         
         private void ProcessPrefabs(string[] prefabGuids, HashSet<string> extractedText, TranslationMetadata metadata, float progressOffset = 0f)
         {
-            float progressIncrement = (1f - progressOffset) / prefabGuids.Length;
-            float currentProgress = progressOffset;
+            if (prefabGuids.Length == 0)
+            {
+                ITextExtractor.ReportProgress(this, 1f);
+                return;
+            }
+
+            float progressIncrement = 1f / prefabGuids.Length;
+            float currentProgress = 0f;
 
             for (int i = 0; i < prefabGuids.Length; i++)
             {

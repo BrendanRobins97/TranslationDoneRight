@@ -120,9 +120,8 @@ namespace Translations
         private void ProcessSourceList(ExtractionSourcesList sources, HashSet<string> extractedText, TranslationMetadata metadata)
         {
             List<string> scriptGuids = new List<string>();
-            float sourceProgress = 0f;
-            float sourceIncrement = 1f / sources.Items.Count;
             
+            // Find all scripts without reporting progress
             foreach (var source in sources.Items)
             {
                 string searchFolder = source.type == ExtractionSourceType.Folder ? source.folderPath : Path.GetDirectoryName(AssetDatabase.GetAssetPath(source.asset));
@@ -135,197 +134,76 @@ namespace Translations
 
                 string[] guids = AssetDatabase.FindAssets("t:Script", new[] { searchFolder });
                 scriptGuids.AddRange(guids);
-                
-                sourceProgress += sourceIncrement;
-                ITextExtractor.ReportProgress(this, sourceProgress * 0.1f); // First 10% for finding scripts
             }
             
-            ProcessScripts(scriptGuids.ToArray(), extractedText, metadata, 0.1f); // Remaining 90% for processing scripts
+            // Process all found scripts
+            ProcessScripts(scriptGuids.ToArray(), extractedText, metadata);
         }
 
         private void ProcessScripts(string[] scriptGuids, HashSet<string> extractedText, TranslationMetadata metadata, float progressOffset = 0f)
         {
-            if (scriptGuids.Length == 0) return;
-            
-            // Process scripts in batches for better performance
-            int batchSize = 100;
-            int batches = (scriptGuids.Length + batchSize - 1) / batchSize;
-            float batchIncrement = (1f - progressOffset) / batches;
-            float progress = progressOffset;
-            
-            for (int batch = 0; batch < batches; batch++)
+            if (scriptGuids.Length == 0)
             {
-                int start = batch * batchSize;
-                int end = Mathf.Min(start + batchSize, scriptGuids.Length);
-                int count = end - start;
+                ITextExtractor.ReportProgress(this, 1f);
+                return;
+            }
+
+            float progressIncrement = 1f / scriptGuids.Length;
+            float currentProgress = 0f;
+
+            // Dictionary to store script data to avoid multiple disk reads
+            var scriptDataByGuid = new Dictionary<string, (string path, string content)>();
+
+            // First pass - read all script files that might contain translations
+            for (int i = 0; i < scriptGuids.Length; i++)
+            {
+                string guid = scriptGuids[i];
                 
-                // Create local cache of script contents to avoid repeated file reads
-                // This dictionary will map from GUID to a tuple of (path, content)
-                var scriptDataByGuid = new Dictionary<string, (string Path, string Content)>(count);
+                // This must be done on the main thread
+                string scriptPath = AssetDatabase.GUIDToAssetPath(guid);
                 
-                // MAIN THREAD: Load all script contents first
-                for (int i = start; i < end; i++)
+                // Only process the file if it should be processed
+                if (TextExtractor.ShouldProcessPath(scriptPath, metadata, GetType()))
                 {
-                    string guid = scriptGuids[i];
-                    
-                    // This must be done on the main thread
-                    string scriptPath = AssetDatabase.GUIDToAssetPath(guid);
-                    
-                    // Only process the file if it should be processed
-                    if (TextExtractor.ShouldProcessPath(scriptPath, metadata, GetType()))
+                    try
                     {
-                        try
+                        // Quick check - read just first 8KB to see if it might contain translation calls
+                        using (var reader = new StreamReader(scriptPath))
                         {
-                            // Quick check - read just first 8KB to see if it might contain translation calls
-                            using (var reader = new StreamReader(scriptPath))
+                            char[] buffer = new char[8192]; // 8KB buffer
+                            int read = reader.Read(buffer, 0, buffer.Length);
+                            string sample = new string(buffer, 0, read);
+                            
+                            if (_quickFilterRegex.IsMatch(sample))
                             {
-                                char[] buffer = new char[8192]; // 8KB buffer
-                                int read = reader.Read(buffer, 0, buffer.Length);
-                                string sample = new string(buffer, 0, read);
+                                // If we found a match in the preview, read the entire file
+                                reader.BaseStream.Position = 0;
+                                string content = reader.ReadToEnd();
+                                scriptDataByGuid[guid] = (scriptPath, content);
+                            }
+                            // If no match in preview, we might still have translation calls later in the file
+                            // Only read the whole file if it's small enough (less than 100KB to limit memory usage)
+                            else if (new FileInfo(scriptPath).Length < 102400) 
+                            {
+                                reader.BaseStream.Position = 0;
+                                string content = reader.ReadToEnd();
                                 
-                                if (_quickFilterRegex.IsMatch(sample))
+                                // Check the full content
+                                if (_quickFilterRegex.IsMatch(content))
                                 {
-                                    // If we found a match in the preview, read the entire file
-                                    reader.BaseStream.Position = 0;
-                                    string content = reader.ReadToEnd();
                                     scriptDataByGuid[guid] = (scriptPath, content);
                                 }
-                                // If no match in preview, we might still have translation calls later in the file
-                                // Only read the whole file if it's small enough (less than 100KB to limit memory usage)
-                                else if (new FileInfo(scriptPath).Length < 102400) 
-                                {
-                                    reader.BaseStream.Position = 0;
-                                    string content = reader.ReadToEnd();
-                                    
-                                    // Check the full content
-                                    if (_quickFilterRegex.IsMatch(content))
-                                    {
-                                        scriptDataByGuid[guid] = (scriptPath, content);
-                                    }
-                                }
-                            }
-                        }
-                        catch (System.Exception e)
-                        {
-                            Debug.LogWarning($"Failed to read script {scriptPath}: {e.Message}");
-                        }
-                    }
-                }
-                
-                // Thread-safe collection for extraction results
-                var localExtractedText = new HashSet<string>(StringComparer.Ordinal);
-                var localMetadataSources = new List<KeyValuePair<string, TextSourceInfo>>();
-                var localLock = new object();
-                
-                // Process each script - here we use the pre-loaded data without accessing AssetDatabase
-                var guidKeys = scriptDataByGuid.Keys.ToArray();
-                
-                // Process in parallel SAFELY - no AssetDatabase calls in here
-                Parallel.ForEach(guidKeys, guid =>
-                {
-                    var scriptLocalResults = new HashSet<string>();
-                    var scriptLocalSources = new List<KeyValuePair<string, TextSourceInfo>>();
-                    
-                    var (scriptPath, scriptContent) = scriptDataByGuid[guid];
-                    
-                    // Pre-compute line indices for more efficient line number lookups
-                    List<int> lineBreakIndices = new List<int>();
-                    lineBreakIndices.Add(0); // First line starts at 0
-                    
-                    for (int i = 0; i < scriptContent.Length; i++)
-                    {
-                        if (scriptContent[i] == '\n')
-                        {
-                            lineBreakIndices.Add(i + 1);
-                        }
-                    }
-                    
-                    // Function to get line number efficiently
-                    int GetLineNumber(int position)
-                    {
-                        // Binary search for line number
-                        int index = lineBreakIndices.BinarySearch(position);
-                        if (index < 0)
-                        {
-                            // If position not found exactly, BinarySearch returns complement of insertion point
-                            index = ~index - 1;
-                        }
-                        return index + 1; // +1 because line numbers are 1-based
-                    }
-                    
-                    for (int patternIndex = 0; patternIndex < _compiledPatterns.Length; patternIndex++)
-                    {
-                        var regex = _compiledPatterns[patternIndex];
-                        MatchCollection matches = regex.Matches(scriptContent);
-                        string methodName = _methodNames[patternIndex];
-                        
-                        foreach (Match match in matches)
-                        {
-                            if (match.Groups.Count > 1)
-                            {
-                                string matchedText = match.Groups[1].Value;
-                                scriptLocalResults.Add(matchedText);
-                                
-                                var sourceInfo = new TextSourceInfo
-                                {
-                                    sourceType = TextSourceType.Script,
-                                    sourcePath = scriptPath,
-                                    componentName = Path.GetFileNameWithoutExtension(scriptPath),
-                                    fieldName = $"{methodName} call at line {GetLineNumber(match.Index)}"
-                                };
-                                
-                                scriptLocalSources.Add(new KeyValuePair<string, TextSourceInfo>(matchedText, sourceInfo));
-                                
-                                // For Format, also extract string arguments
-                                if (methodName == "Format()" && match.Groups.Count > 2)
-                                {
-                                    var args = match.Groups[2].Value;
-                                    var argMatches = _stringArgPattern.Matches(args);
-                                    foreach (Match argMatch in argMatches)
-                                    {
-                                        if (argMatch.Groups.Count > 1)
-                                        {
-                                            string argText = argMatch.Groups[1].Value;
-                                            scriptLocalResults.Add(argText);
-                                            
-                                            var argSourceInfo = new TextSourceInfo
-                                            {
-                                                sourceType = TextSourceType.Script,
-                                                sourcePath = scriptPath,
-                                                componentName = Path.GetFileNameWithoutExtension(scriptPath),
-                                                fieldName = $"{methodName} argument at line {GetLineNumber(match.Index + argMatch.Index)}"
-                                            };
-                                            
-                                            scriptLocalSources.Add(new KeyValuePair<string, TextSourceInfo>(argText, argSourceInfo));
-                                        }
-                                    }
-                                }
                             }
                         }
                     }
-                    
-                    // Add to the batch results in a thread-safe way
-                    if (scriptLocalResults.Count > 0)
+                    catch (System.Exception e)
                     {
-                        lock (localLock)
-                        {
-                            localExtractedText.UnionWith(scriptLocalResults);
-                            localMetadataSources.AddRange(scriptLocalSources);
-                        }
+                        Debug.LogWarning($"Failed to read script {scriptPath}: {e.Message}");
                     }
-                });
-                
-                // MAIN THREAD: Update the extraction results and metadata
-                extractedText.UnionWith(localExtractedText);
-                
-                // Add all the source info to metadata
-                foreach (var pair in localMetadataSources)
-                {
-                    metadata.AddSource(pair.Key, pair.Value);
                 }
-                
-                progress += batchIncrement;
-                ITextExtractor.ReportProgress(this, progress);
+
+                currentProgress += progressIncrement;
+                ITextExtractor.ReportProgress(this, currentProgress);
             }
         }
     }

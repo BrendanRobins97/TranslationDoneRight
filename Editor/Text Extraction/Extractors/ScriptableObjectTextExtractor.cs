@@ -35,10 +35,9 @@ namespace Translations
         
         private void ProcessSourceList(ExtractionSourcesList sources, HashSet<string> extractedText, TranslationMetadata metadata)
         {
-            float sourceProgress = 0f;
-            float sourceIncrement = 1f / sources.Items.Count;
             var allGuids = new List<string>();
 
+            // Find all ScriptableObjects without reporting progress
             foreach (var source in sources.Items)
             {
                 string searchFolder = source.type == ExtractionSourceType.Folder ? source.folderPath : System.IO.Path.GetDirectoryName(AssetDatabase.GetAssetPath(source.asset));
@@ -52,32 +51,45 @@ namespace Translations
                 
                 string[] guids = AssetDatabase.FindAssets("t:ScriptableObject", new[] { searchFolder });
                 allGuids.AddRange(guids);
-                
-                sourceProgress += sourceIncrement;
-                ITextExtractor.ReportProgress(this, sourceProgress * 0.1f); // First 10% for finding scriptable objects
             }
 
-            ProcessScriptableObjects(allGuids.ToArray(), extractedText, metadata, 0.1f); // Remaining 90% for processing
+            // Process all found ScriptableObjects
+            ProcessScriptableObjects(allGuids.ToArray(), extractedText, metadata);
         }
         
         private void ProcessScriptableObjects(string[] guids, HashSet<string> extractedText, TranslationMetadata metadata, float progressOffset = 0f)
         {
-            float progressIncrement = (1f - progressOffset) / (guids.Length > 0 ? guids.Length : 1);
-            float currentProgress = progressOffset;
+            if (guids.Length == 0)
+            {
+                ITextExtractor.ReportProgress(this, 1f);
+                return;
+            }
+
+            float progressIncrement = 1f / guids.Length;
+            float currentProgress = 0f;
 
             foreach (string guid in guids)
             {
                 string path = AssetDatabase.GUIDToAssetPath(guid);
                 ScriptableObject scriptableObject = AssetDatabase.LoadAssetAtPath<ScriptableObject>(path);
-
-                if (scriptableObject != null)
+                
+                if (scriptableObject != null && TextExtractor.ShouldProcessPath(path, metadata, GetType()))
                 {
-                    TranslationExtractionHelper.ExtractTranslationsFromObject(
-                        scriptableObject,
-                        extractedText,
-                        metadata,
-                        path,
-                        sourceType: TextSourceType.ScriptableObject);
+                    try
+                    {
+                        TranslationExtractionHelper.ExtractTranslationsFromObject(
+                            scriptableObject,
+                            extractedText,
+                            metadata,
+                            path,
+                            "",
+                            TextSourceType.ScriptableObject
+                        );
+                    }
+                    catch (System.Exception e)
+                    {
+                        Debug.LogWarning($"Failed to process ScriptableObject {path}: {e.Message}");
+                    }
                 }
 
                 currentProgress += progressIncrement;

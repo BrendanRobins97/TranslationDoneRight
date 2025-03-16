@@ -147,16 +147,108 @@ namespace Translations
                 }
 
                 // Extract TextMeshPro texts
-                ExtractTMProTexts(scene, extractedText, metadata, scenePath);
+                try 
+                {
+                    TextMeshProUGUI[] textMeshProObjects = GameObject.FindObjectsOfType<TextMeshProUGUI>(true);
+                    foreach (TextMeshProUGUI textObject in textMeshProObjects)
+                    {
+                        if (textObject == null) continue;
+
+                        try
+                        {
+                            if (textObject.GetComponent<DynamicTMP>())
+                            {
+                                continue;
+                            }
+                            if (!string.IsNullOrWhiteSpace(textObject.text))
+                            {
+                                extractedText.Add(textObject.text);
+                                
+                                var sourceInfo = new TextSourceInfo
+                                {
+                                    sourceType = TextSourceType.Scene,
+                                    sourcePath = scenePath,
+                                    objectPath = GetGameObjectPath(textObject.gameObject),
+                                    componentName = textObject.GetType().Name,
+                                    fieldName = "text",
+                                };
+                                metadata.AddSource(textObject.text, sourceInfo);
+                            }
+                        }
+                        catch (System.Exception e)
+                        {
+                            Debug.LogWarning($"Failed to process TMP text in scene {scenePath}: {e.Message}");
+                        }
+                    }
+                }
+                catch (System.Exception e)
+                {
+                    Debug.LogWarning($"Failed to process TMP components in scene {scenePath}: {e.Message}");
+                }
 
                 // Extract UI Text texts
-                ExtractUITexts(scene, extractedText, metadata, scenePath);
+                try
+                {
+                    Text[] uiTextObjects = GameObject.FindObjectsOfType<Text>(true);
+                    foreach (Text uiText in uiTextObjects)
+                    {
+                        if (uiText == null) continue;
+
+                        try
+                        {
+                            if (uiText.GetComponent<DynamicTMP>())
+                            {
+                                continue;
+                            }
+                            if (!string.IsNullOrWhiteSpace(uiText.text))
+                            {
+                                extractedText.Add(uiText.text);
+                                
+                                var sourceInfo = new TextSourceInfo
+                                {
+                                    sourceType = TextSourceType.Scene,
+                                    sourcePath = scenePath,
+                                    objectPath = GetGameObjectPath(uiText.gameObject),
+                                    componentName = uiText.GetType().Name,
+                                    fieldName = "text",
+                                };
+                                metadata.AddSource(uiText.text, sourceInfo);
+                            }
+                        }
+                        catch (System.Exception e)
+                        {
+                            Debug.LogWarning($"Failed to process UI text in scene {scenePath}: {e.Message}");
+                        }
+                    }
+                }
+                catch (System.Exception e)
+                {
+                    Debug.LogWarning($"Failed to process UI Text components in scene {scenePath}: {e.Message}");
+                }
 
                 // Extract fields marked with TranslatedAttribute
-                foreach (GameObject rootObj in scene.GetRootGameObjects())
+                try
                 {
-                    ExtractFromGameObject(rootObj, extractedText, metadata, scenePath);
+                    foreach (GameObject rootObj in scene.GetRootGameObjects())
+                    {
+                        try
+                        {
+                            ExtractFromGameObject(rootObj, extractedText, metadata, scenePath);
+                        }
+                        catch (System.Exception e)
+                        {
+                            Debug.LogWarning($"Failed to process root GameObject '{rootObj.name}' in scene {scenePath}: {e.Message}");
+                        }
+                    }
                 }
+                catch (System.Exception e)
+                {
+                    Debug.LogWarning($"Failed to process root GameObjects in scene {scenePath}: {e.Message}");
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Failed to process scene {scenePath}: {e.Message}");
             }
             finally
             {
@@ -165,76 +257,50 @@ namespace Translations
             }
         }
 
-        private void ExtractTMProTexts(Scene scene, HashSet<string> extractedText, TranslationMetadata metadata, string scenePath)
-        {
-            TextMeshProUGUI[] textMeshProObjects = GameObject.FindObjectsOfType<TextMeshProUGUI>(true);
-            foreach (TextMeshProUGUI textObject in textMeshProObjects)
-            {
-                if (textObject.GetComponent<DynamicTMP>())
-                {
-                    continue;
-                }
-                if (!string.IsNullOrWhiteSpace(textObject.text))
-                {
-                    extractedText.Add(textObject.text);
-                    
-                    var sourceInfo = new TextSourceInfo
-                    {
-                        sourceType = TextSourceType.Scene,
-                        sourcePath = scenePath,
-                        objectPath = GetGameObjectPath(textObject.gameObject),
-                        componentName = textObject.GetType().Name,
-                        fieldName = "text",
-                    };
-                    metadata.AddSource(textObject.text, sourceInfo);
-                }
-            }
-        }
-
-        private void ExtractUITexts(Scene scene, HashSet<string> extractedText, TranslationMetadata metadata, string scenePath)
-        {
-            Text[] uiTextObjects = GameObject.FindObjectsOfType<Text>(true);
-            foreach (Text uiText in uiTextObjects)
-            {
-                if (uiText.GetComponent<DynamicTMP>())
-                {
-                    continue;
-                }
-                if (!string.IsNullOrWhiteSpace(uiText.text))
-                {
-                    extractedText.Add(uiText.text);
-                    
-                    var sourceInfo = new TextSourceInfo
-                    {
-                        sourceType = TextSourceType.Scene,
-                        sourcePath = scenePath,
-                        objectPath = GetGameObjectPath(uiText.gameObject),
-                        componentName = uiText.GetType().Name,
-                        fieldName = "text",
-                    };
-                    metadata.AddSource(uiText.text, sourceInfo);
-                }
-            }
-        }
-
         private void ExtractFromGameObject(GameObject obj, HashSet<string> extractedText, TranslationMetadata metadata, string scenePath)
         {
-            Component[] components = obj.GetComponents<Component>();
-            foreach (Component component in components)
+            try
             {
-                if (component == null) continue;
-                TranslationExtractionHelper.ExtractTranslationsFromObject(
-                    component, 
-                    extractedText, 
-                    metadata, 
-                    scenePath, 
-                    GetGameObjectPath(obj), 
-                    TextSourceType.Scene);
-            }
+                Component[] components = obj.GetComponents<Component>();
+                foreach (Component component in components)
+                {
+                    if (component == null)
+                    {
+                        Debug.LogWarning($"Null component found in GameObject '{obj.name}' in scene {scenePath}");
+                        continue;
+                    }
 
-            foreach (Transform child in obj.transform)
+                    try
+                    {
+                        TranslationExtractionHelper.ExtractTranslationsFromObject(
+                            component, 
+                            extractedText, 
+                            metadata, 
+                            scenePath, 
+                            GetGameObjectPath(obj), 
+                            TextSourceType.Scene);
+                    }
+                    catch (System.Exception e)
+                    {
+                        Debug.LogWarning($"Failed to extract translations from component {component.GetType().Name} in GameObject '{obj.name}' in scene {scenePath}: {e.Message}");
+                    }
+                }
+
+                foreach (Transform child in obj.transform)
+                {
+                    try
+                    {
+                        ExtractFromGameObject(child.gameObject, extractedText, metadata, scenePath);
+                    }
+                    catch (System.Exception e)
+                    {
+                        Debug.LogWarning($"Failed to process child GameObject '{child.name}' in scene {scenePath}: {e.Message}");
+                    }
+                }
+            }
+            catch (System.Exception e)
             {
-                ExtractFromGameObject(child.gameObject, extractedText, metadata, scenePath);
+                Debug.LogWarning($"Failed to process GameObject '{obj.name}' in scene {scenePath}: {e.Message}");
             }
         }
 

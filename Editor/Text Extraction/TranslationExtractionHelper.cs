@@ -110,6 +110,22 @@ namespace Translations
                 if (property.GetIndexParameters().Length > 0)
                     return true;
 
+                // Skip if we can't safely get the getter method
+                var getMethod = property.GetGetMethod();
+                if (getMethod == null || !getMethod.IsPublic || getMethod.IsAbstract)
+                    return true;
+
+                // Skip if the declaring type is not accessible
+                if (property.DeclaringType == null || 
+                    property.DeclaringType.IsNotPublic || 
+                    property.DeclaringType.IsAbstract)
+                    return true;
+
+                // Skip if property requires special runtime context
+                if (property.GetCustomAttributes(true)
+                           .Any(attr => attr.GetType().FullName?.Contains("RuntimeInitialize") == true))
+                    return true;
+
                 return false;
             }
             catch

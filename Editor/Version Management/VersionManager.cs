@@ -396,7 +396,7 @@ namespace Translations
             CheckForUpdatesAndShowWindow();
         }
 
-        private static async void CheckForUpdatesAndShowWindow()
+        public static async void CheckForUpdatesAndShowWindow()
         {
             try
             {

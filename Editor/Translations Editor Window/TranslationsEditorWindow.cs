@@ -57,7 +57,7 @@ namespace Translations
         [MenuItem("Window/Translations/Check for Updates")]
         public static void CheckForUpdates()
         {
-            VersionManager.ShowUpdateNotificationIfNeeded();
+            VersionManager.CheckForUpdatesAndShowWindow();
         }
 
         private void OnEnable()

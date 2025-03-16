@@ -192,6 +192,14 @@ namespace Translations
 
                             try
                             {
+                                // Skip Unity built-in components unless they're MonoBehaviours
+                                var componentType = component.GetType();
+                                if (componentType.FullName.StartsWith("UnityEngine") && 
+                                    !typeof(MonoBehaviour).IsAssignableFrom(componentType))
+                                {
+                                    continue;
+                                }
+
                                 Debug.Log($"[PrefabTextExtractor] Processing component {component.GetType().Name} on {GetGameObjectPath(component.gameObject)}");
                                 TranslationExtractionHelper.ExtractTranslationsFromObject(
                                     component,

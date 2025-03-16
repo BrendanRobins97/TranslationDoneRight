@@ -49,15 +49,47 @@ namespace Translations
             if (type == null) return true;
             
             // Skip Unity internal types except GameObject and Component
-            if (type.FullName.StartsWith("UnityEngine") || type.FullName.StartsWith("UnityEditor"))
+            string fullName = type.FullName ?? "";
+            if (fullName.StartsWith("UnityEngine") || fullName.StartsWith("UnityEditor"))
             {
+                // Only allow specific Unity types we want to process
                 return type != typeof(GameObject) && 
-                       type != typeof(Component) && 
-                       type != typeof(MonoBehaviour) &&
+                       !typeof(MonoBehaviour).IsAssignableFrom(type) &&
                        type != typeof(Transform);
             }
             
             return false;
+        }
+
+        private static bool ShouldSkipProperty(PropertyInfo property, object obj)
+        {
+            if (property == null) return true;
+
+            try
+            {
+                // Skip properties that might cause issues
+                if (property.Name == "Animation" || 
+                    property.Name == "audio" ||
+                    property.Name == "camera" ||
+                    property.Name == "light" ||
+                    property.Name == "particleSystem")
+                    return true;
+
+                // Skip if property type is a Unity type we should skip
+                if (ShouldSkipUnityType(property.PropertyType))
+                    return true;
+
+                // Skip if property is from a Unity component and we're processing a Component
+                if (obj is Component && property.DeclaringType?.FullName?.StartsWith("UnityEngine") == true)
+                    return true;
+
+                return false;
+            }
+            catch
+            {
+                // If we get any error checking the property, skip it
+                return true;
+            }
         }
 
         private static void ExtractFieldsRecursive(
@@ -363,17 +395,21 @@ namespace Translations
             string objectPath, 
             TextSourceType sourceType)
         {
-            if (!property.CanRead) return;
+            if (!property.CanRead || ShouldSkipProperty(property, obj)) return;
 
             try
             {
-                // Check if this is a Unity property that requires a component
-                if (obj is Component && property.DeclaringType.FullName.StartsWith("UnityEngine"))
+                object propertyValue = null;
+                try
                 {
+                    propertyValue = property.GetValue(obj);
+                }
+                catch (Exception)
+                {
+                    // If we can't get the property value, skip it
                     return;
                 }
-                
-                object propertyValue = property.GetValue(obj);
+
                 if (propertyValue == null) return;
 
                 // Handle collections

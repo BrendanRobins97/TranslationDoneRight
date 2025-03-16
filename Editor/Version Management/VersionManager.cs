@@ -93,6 +93,27 @@ namespace Translations
             return null;
         }
 
+        private static string GetPackagesLockPath()
+        {
+            string projectPath = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
+            
+            // Try the Unity 2021+ location first
+            string packagesLockPath = Path.Combine(projectPath, "Packages", "packages-lock.json");
+            if (File.Exists(packagesLockPath))
+            {
+                return packagesLockPath;
+            }
+
+            // Fallback to the root location for older Unity versions
+            packagesLockPath = Path.Combine(projectPath, "packages-lock.json");
+            if (File.Exists(packagesLockPath))
+            {
+                return packagesLockPath;
+            }
+
+            return null;
+        }
+
         private static async Task<string> ExecuteGitCommand(string command, string workingDir)
         {
             try
@@ -237,13 +258,11 @@ namespace Translations
         {
             try
             {
-                // Find the packages-lock.json file in the Unity project root
-                string projectPath = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
-                string packagesLockPath = Path.Combine(projectPath, "packages-lock.json");
-                
-                if (!File.Exists(packagesLockPath))
+                // Find the packages-lock.json file
+                string packagesLockPath = GetPackagesLockPath();
+                if (packagesLockPath == null)
                 {
-                    Debug.LogError("[Version Check] packages-lock.json not found");
+                    Debug.LogError("[Version Check] packages-lock.json not found in either Packages/ or project root");
                     return false;
                 }
 
@@ -510,10 +529,8 @@ namespace Translations
                 AssetDatabase.Refresh();
 
                 // Update the package hash in packages-lock.json
-                string projectPath = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
-                string packagesLockPath = Path.Combine(projectPath, "packages-lock.json");
-                
-                if (File.Exists(packagesLockPath))
+                string packagesLockPath = GetPackagesLockPath();
+                if (packagesLockPath != null)
                 {
                     string jsonContent = File.ReadAllText(packagesLockPath);
                     var packageLock = JsonUtility.FromJson<PackageLockInfo>(jsonContent);

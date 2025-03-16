@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text.RegularExpressions;
 using Debug = UnityEngine.Debug;
+using System.Linq;
 
 namespace Translations
 {
@@ -128,27 +129,48 @@ namespace Translations
             await ExecuteGitCommand("fetch origin", workingDir);
         }
 
-        private static async Task<bool> HasRemoteChanges(string workingDir)
+        private static async Task<string> GetRemoteCommitHash(string workingDir)
         {
             try
             {
-                string behindCount = await ExecuteGitCommand("rev-list HEAD..origin/main --count", workingDir);
-                return int.Parse(behindCount) > 0;
+                return await ExecuteGitCommand("rev-parse origin/main", workingDir);
             }
             catch
             {
-                // Try master branch if main doesn't exist
                 try
                 {
-                    string behindCount = await ExecuteGitCommand("rev-list HEAD..origin/master --count", workingDir);
-                    return int.Parse(behindCount) > 0;
+                    return await ExecuteGitCommand("rev-parse origin/master", workingDir);
                 }
                 catch (Exception e)
                 {
-                    Debug.LogError($"Error checking for remote changes: {e.Message}");
-                    return false;
+                    Debug.LogError($"Error getting remote commit hash: {e.Message}");
+                    return null;
                 }
             }
+        }
+
+        private static async Task<string> GetCurrentCommitHash(string workingDir)
+        {
+            try
+            {
+                return await ExecuteGitCommand("rev-parse HEAD", workingDir);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"Error getting current commit hash: {e.Message}");
+                return null;
+            }
+        }
+
+        private static async Task<bool> HasRemoteChanges(string workingDir)
+        {
+            string currentHash = await GetCurrentCommitHash(workingDir);
+            string remoteHash = await GetRemoteCommitHash(workingDir);
+            
+            if (currentHash == null || remoteHash == null)
+                return false;
+
+            return currentHash != remoteHash;
         }
 
         private static async Task<string> GetRemoteChangelogContent(string workingDir)
@@ -171,10 +193,33 @@ namespace Translations
             }
         }
 
+        private static async Task<string> GetRemotePackageVersion(string workingDir)
+        {
+            try
+            {
+                string packageJson = await ExecuteGitCommand("show origin/main:package.json", workingDir);
+                var remotePackageInfo = JsonUtility.FromJson<PackageInfo>(packageJson);
+                return remotePackageInfo.version;
+            }
+            catch
+            {
+                try
+                {
+                    string packageJson = await ExecuteGitCommand("show origin/master:package.json", workingDir);
+                    var remotePackageInfo = JsonUtility.FromJson<PackageInfo>(packageJson);
+                    return remotePackageInfo.version;
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError($"Error getting remote package version: {e.Message}");
+                    return null;
+                }
+            }
+        }
+
         public static async Task<VersionInfo> CheckForUpdates()
         {
             string packagePath = GetPackagePath();
-            string changelogPath = Path.Combine(packagePath, "CHANGELOG.md");
             
             try
             {
@@ -185,6 +230,13 @@ namespace Translations
                 if (!await HasRemoteChanges(packagePath))
                 {
                     return null; // No updates available
+                }
+
+                // Get remote version from package.json
+                string remoteVersion = await GetRemotePackageVersion(packagePath);
+                if (string.IsNullOrEmpty(remoteVersion))
+                {
+                    return null;
                 }
 
                 // Get remote changelog content
@@ -199,24 +251,30 @@ namespace Translations
                 File.WriteAllText(tempChangelogPath, remoteChangelogContent);
 
                 // Parse the changelog
-                var unreleasedChanges = ChangelogParser.GetLatestUnreleasedChanges(tempChangelogPath);
-                if (unreleasedChanges == null)
+                var entries = ChangelogParser.ParseChangelog(tempChangelogPath);
+                
+                // Find the entry that matches the remote version
+                var matchingEntry = entries.FirstOrDefault(e => e.Version == remoteVersion) ?? 
+                                  entries.FirstOrDefault(e => e.Version == "Unreleased");
+
+                if (matchingEntry == null)
                 {
+                    File.Delete(tempChangelogPath);
                     return null;
                 }
 
-                // Get current commit info
-                var (currentHash, _) = await GetLatestCommitInfo(packagePath);
+                // Get remote commit hash
+                string remoteHash = await GetRemoteCommitHash(packagePath);
 
                 // Create version info from changelog
                 var versionInfo = new VersionInfo
                 {
-                    version = unreleasedChanges.Version,
-                    releaseDate = unreleasedChanges.Date,
-                    changes = unreleasedChanges.GetAllChanges(),
+                    version = remoteVersion,
+                    releaseDate = matchingEntry.Date,
+                    changes = matchingEntry.GetAllChanges(),
                     minUnityVersion = "2020.3", // This should ideally be read from the remote package.json
                     downloadUrl = "https://github.com/BrendanRobins97/TranslationDoneRight",
-                    commitHash = currentHash
+                    commitHash = remoteHash
                 };
 
                 // Clean up temporary file
@@ -284,7 +342,7 @@ namespace Translations
                 await ExecuteGitCommand("fetch origin", packagePath);
 
                 // Checkout the specific commit
-                string result = await ExecuteGitCommand($"checkout {targetCommit}", packagePath);
+                await ExecuteGitCommand($"checkout {targetCommit}", packagePath);
 
                 // Pop stashed changes if any
                 try

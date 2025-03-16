@@ -73,6 +73,7 @@ namespace Translations
         {
             try
             {
+                Debug.Log($"[Version Check] Executing git command: {command}");
                 var processInfo = new ProcessStartInfo
                 {
                     FileName = "git",
@@ -104,12 +105,13 @@ namespace Translations
                         throw new Exception($"Git command failed: {error}");
                     }
 
+                    Debug.Log($"[Version Check] Git command completed successfully");
                     return output.Trim();
                 }
             }
             catch (Exception e)
             {
-                throw new Exception($"Error executing git command: {e.Message}");
+                throw new Exception($"Error executing git command '{command}': {e.Message}");
             }
         }
 
@@ -167,10 +169,18 @@ namespace Translations
             string currentHash = await GetCurrentCommitHash(workingDir);
             string remoteHash = await GetRemoteCommitHash(workingDir);
             
+            Debug.Log($"[Version Check] Current commit hash: {currentHash}");
+            Debug.Log($"[Version Check] Remote commit hash: {remoteHash}");
+            
             if (currentHash == null || remoteHash == null)
+            {
+                Debug.LogError("[Version Check] Failed to get commit hashes");
                 return false;
+            }
 
-            return currentHash != remoteHash;
+            bool hasChanges = currentHash != remoteHash;
+            Debug.Log($"[Version Check] Has remote changes: {hasChanges}");
+            return hasChanges;
         }
 
         private static async Task<string> GetRemoteChangelogContent(string workingDir)
@@ -197,6 +207,7 @@ namespace Translations
         {
             try
             {
+                Debug.Log("[Version Check] Attempting to get package.json from main branch...");
                 string packageJson = await ExecuteGitCommand("show origin/main:package.json", workingDir);
                 var remotePackageInfo = JsonUtility.FromJson<PackageInfo>(packageJson);
                 return remotePackageInfo.version;
@@ -205,13 +216,14 @@ namespace Translations
             {
                 try
                 {
+                    Debug.Log("[Version Check] Attempting to get package.json from master branch...");
                     string packageJson = await ExecuteGitCommand("show origin/master:package.json", workingDir);
                     var remotePackageInfo = JsonUtility.FromJson<PackageInfo>(packageJson);
                     return remotePackageInfo.version;
                 }
                 catch (Exception e)
                 {
-                    Debug.LogError($"Error getting remote package version: {e.Message}");
+                    Debug.LogError($"[Version Check] Error getting remote package version: {e.Message}");
                     return null;
                 }
             }
@@ -220,31 +232,42 @@ namespace Translations
         public static async Task<VersionInfo> CheckForUpdates()
         {
             string packagePath = GetPackagePath();
+            Debug.Log($"[Version Check] Starting version check in path: {packagePath}");
             
             try
             {
                 // Fetch latest changes from remote
+                Debug.Log("[Version Check] Fetching latest changes from remote...");
                 await FetchLatestChanges(packagePath);
 
                 // Check if we have any updates
+                Debug.Log("[Version Check] Checking for remote changes...");
                 if (!await HasRemoteChanges(packagePath))
                 {
+                    Debug.Log("[Version Check] No remote changes found.");
                     return null; // No updates available
                 }
+                Debug.Log("[Version Check] Remote changes detected!");
 
                 // Get remote version from package.json
+                Debug.Log("[Version Check] Getting remote package version...");
                 string remoteVersion = await GetRemotePackageVersion(packagePath);
                 if (string.IsNullOrEmpty(remoteVersion))
                 {
+                    Debug.LogError("[Version Check] Failed to get remote package version.");
                     return null;
                 }
+                Debug.Log($"[Version Check] Remote version: {remoteVersion}, Current version: {CurrentVersion}");
 
                 // Get remote changelog content
+                Debug.Log("[Version Check] Getting remote changelog content...");
                 string remoteChangelogContent = await GetRemoteChangelogContent(packagePath);
                 if (string.IsNullOrEmpty(remoteChangelogContent))
                 {
+                    Debug.LogError("[Version Check] Failed to get remote changelog content.");
                     return null;
                 }
+                Debug.Log("[Version Check] Successfully retrieved remote changelog.");
 
                 // Write remote changelog to a temporary file
                 string tempChangelogPath = Path.Combine(Path.GetTempPath(), "CHANGELOG.md");
@@ -252,6 +275,7 @@ namespace Translations
 
                 // Parse the changelog
                 var entries = ChangelogParser.ParseChangelog(tempChangelogPath);
+                Debug.Log($"[Version Check] Found {entries.Count} changelog entries.");
                 
                 // Find the entry that matches the remote version
                 var matchingEntry = entries.FirstOrDefault(e => e.Version == remoteVersion) ?? 
@@ -259,12 +283,15 @@ namespace Translations
 
                 if (matchingEntry == null)
                 {
+                    Debug.LogError($"[Version Check] No changelog entry found for version {remoteVersion}");
                     File.Delete(tempChangelogPath);
                     return null;
                 }
+                Debug.Log($"[Version Check] Found matching changelog entry for version {matchingEntry.Version}");
 
                 // Get remote commit hash
                 string remoteHash = await GetRemoteCommitHash(packagePath);
+                Debug.Log($"[Version Check] Remote commit hash: {remoteHash}");
 
                 // Create version info from changelog
                 var versionInfo = new VersionInfo
@@ -279,12 +306,13 @@ namespace Translations
 
                 // Clean up temporary file
                 File.Delete(tempChangelogPath);
+                Debug.Log("[Version Check] Successfully created version info for update.");
 
                 return versionInfo;
             }
             catch (Exception e)
             {
-                Debug.LogError($"Error checking for updates: {e.Message}");
+                Debug.LogError($"[Version Check] Error checking for updates: {e.Message}\nStack trace: {e.StackTrace}");
                 return null;
             }
         }

@@ -64,6 +64,20 @@ namespace Translations
             public string version;
         }
 
+        [Serializable]
+        private class PackageLockInfo
+        {
+            public Dictionary<string, PackageLockEntry> dependencies;
+        }
+
+        [Serializable]
+        private class PackageLockEntry
+        {
+            public string version;
+            public string source;
+            public string hash;
+        }
+
         private static string GetPackagePath()
         {
             return Path.GetFullPath(Path.Combine(Application.dataPath, "Translations Done Right"));
@@ -164,17 +178,58 @@ namespace Translations
             }
         }
 
+        private static async Task<(string currentHash, string remoteHash)> GetPackageHashes()
+        {
+            try
+            {
+                // Find the packages-lock.json file in the Unity project root
+                string projectPath = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
+                string packagesLockPath = Path.Combine(projectPath, "packages-lock.json");
+                
+                if (!File.Exists(packagesLockPath))
+                {
+                    Debug.LogError("[Version Check] packages-lock.json not found");
+                    return (null, null);
+                }
+
+                // Read and parse the packages-lock.json file
+                string jsonContent = File.ReadAllText(packagesLockPath);
+                var packageLock = JsonUtility.FromJson<PackageLockInfo>(jsonContent);
+
+                if (packageLock?.dependencies == null || 
+                    !packageLock.dependencies.ContainsKey("com.flamboozle.translations-done-right"))
+                {
+                    Debug.LogError("[Version Check] Package not found in packages-lock.json");
+                    return (null, null);
+                }
+
+                var packageInfo = packageLock.dependencies["com.flamboozle.translations-done-right"];
+                string currentHash = packageInfo.hash;
+
+                // Fetch latest changes to get remote hash
+                string packagePath = GetPackagePath();
+                await FetchLatestChanges(packagePath);
+                string remoteHash = await GetRemoteCommitHash(packagePath);
+
+                Debug.Log($"[Version Check] Current package hash: {currentHash}");
+                Debug.Log($"[Version Check] Remote package hash: {remoteHash}");
+
+                return (currentHash, remoteHash);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[Version Check] Error getting package hashes: {e.Message}");
+                return (null, null);
+            }
+        }
+
         private static async Task<bool> HasRemoteChanges(string workingDir)
         {
-            string currentHash = await GetCurrentCommitHash(workingDir);
-            string remoteHash = await GetRemoteCommitHash(workingDir);
-            
-            Debug.Log($"[Version Check] Current commit hash: {currentHash}");
-            Debug.Log($"[Version Check] Remote commit hash: {remoteHash}");
+            var (currentHash, remoteHash) = await GetPackageHashes();
             
             if (currentHash == null || remoteHash == null)
             {
-                Debug.LogError("[Version Check] Failed to get commit hashes");
+                Debug.LogError("[Version Check] Failed to get package hashes");
                 return false;
             }
 
@@ -384,6 +439,23 @@ namespace Translations
 
                 // Force Unity to refresh assets
                 AssetDatabase.Refresh();
+
+                // Update the package hash in packages-lock.json
+                string projectPath = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
+                string packagesLockPath = Path.Combine(projectPath, "packages-lock.json");
+                
+                if (File.Exists(packagesLockPath))
+                {
+                    string jsonContent = File.ReadAllText(packagesLockPath);
+                    var packageLock = JsonUtility.FromJson<PackageLockInfo>(jsonContent);
+                    
+                    if (packageLock?.dependencies != null && 
+                        packageLock.dependencies.ContainsKey("com.flamboozle.translations-done-right"))
+                    {
+                        packageLock.dependencies["com.flamboozle.translations-done-right"].hash = targetCommit;
+                        File.WriteAllText(packagesLockPath, JsonUtility.ToJson(packageLock, true));
+                    }
+                }
 
                 Debug.Log($"Successfully updated package to version {targetCommit}");
                 return true;

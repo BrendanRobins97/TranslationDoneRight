@@ -51,18 +51,74 @@ namespace Translations
                     string packagesLockPath = GetPackagesLockPath();
                     if (packagesLockPath != null)
                     {
+                        Debug.Log($"[Version Check] Found packages-lock.json at: {packagesLockPath}");
                         try
                         {
                             string jsonContent = File.ReadAllText(packagesLockPath);
-                            var currentHashMatch = Regex.Match(jsonContent, "\"com\\.flamboozle\\.translations-done-right\"[^}]+\"version\":\\s*\"([^\"]+)\"");
-                            if (currentHashMatch.Success)
+                            // Parse the packages-lock.json to get the hash
+                            var packageLock = JsonUtility.FromJson<PackageLockInfo>(jsonContent);
+                            
+                            if (packageLock?.dependencies != null && 
+                                packageLock.dependencies.ContainsKey("com.flamboozle.translations-done-right"))
                             {
-                                return currentHashMatch.Groups[1].Value;
+                                var packageInfo = packageLock.dependencies["com.flamboozle.translations-done-right"];
+                                string hash = packageInfo.hash;
+                                
+                                if (!string.IsNullOrEmpty(hash))
+                                {
+                                    // Get the tag for this commit hash using git
+                                    try
+                                    {
+                                        string packagePath = GetPackagePath();
+                                        if (packagePath != null)
+                                        {
+                                            // Try to get the tag that points to this commit
+                                            var tagTask = ExecuteGitCommand($"describe --tags --exact-match {hash}", packagePath);
+                                            tagTask.Wait();
+                                            string tag = tagTask.Result;
+                                            
+                                            if (!string.IsNullOrEmpty(tag))
+                                            {
+                                                // Remove the 'v' prefix if present
+                                                if (tag.StartsWith("v"))
+                                                {
+                                                    tag = tag.Substring(1);
+                                                }
+                                                return tag;
+                                            }
+                                        }
+                                    }
+                                    catch (Exception e)
+                                    {
+                                        Debug.LogWarning($"[Version Check] Could not get version from git tag: {e.Message}");
+                                    }
+                                    
+                                    // If we couldn't get the tag, try to get version from package.json at this commit
+                                    try
+                                    {
+                                        var packageJsonTask = ExecuteGitCommand($"show {hash}:package.json", packagePath);
+                                        packageJsonTask.Wait();
+                                        string packageJson = packageJsonTask.Result;
+                                        var packageData = JsonUtility.FromJson<PackageInfo>(packageJson);
+                                        if (!string.IsNullOrEmpty(packageData?.version))
+                                        {
+                                            return packageData.version;
+                                        }
+                                    }
+                                    catch (Exception e)
+                                    {
+                                        Debug.LogWarning($"[Version Check] Could not get version from package.json at commit: {e.Message}");
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                Debug.LogError("[Version Check] Package not found in packages-lock.json");
                             }
                         }
                         catch (Exception e)
                         {
-                            Debug.LogError($"Error reading package version from packages-lock.json: {e.Message}");
+                            Debug.LogError($"[Version Check] Error reading package version from packages-lock.json: {e.Message}");
                         }
                     }
                 }
@@ -76,11 +132,11 @@ namespace Translations
                     }
                     catch (Exception e)
                     {
-                        Debug.LogError($"Error reading package version: {e.Message}");
+                        Debug.LogError($"[Version Check] Error reading package version from package.json: {e.Message}");
                     }
                 }
                 
-                return "1.0.0"; // Fallback version
+                return "Unknown"; // Changed from "1.0.0" to "Unknown" to be more accurate
             }
         }
 
@@ -284,60 +340,48 @@ namespace Translations
         {
             try
             {
-                // Find the packages-lock.json file
-                string packagesLockPath = GetPackagesLockPath();
-                if (packagesLockPath == null)
+                // Get the current version
+                string currentVersion = CurrentVersion;
+                if (currentVersion == "Unknown")
                 {
-                    Debug.LogError("[Version Check] packages-lock.json not found in either Packages/ or project root");
+                    Debug.LogError("[Version Check] Could not determine current version");
                     return false;
                 }
 
-                Debug.Log($"[Version Check] Found packages-lock.json at: {packagesLockPath}");
-
-                // Read and parse the packages-lock.json file
-                string jsonContent = File.ReadAllText(packagesLockPath);
-                
-                // Extract the current hash from packages-lock.json
-                var currentHashMatch = Regex.Match(jsonContent, "\"com\\.flamboozle\\.translations-done-right\"[^}]+\"hash\":\\s*\"([a-f0-9]+)\"");
-                if (!currentHashMatch.Success)
-                {
-                    Debug.LogError("[Version Check] Could not find package hash in packages-lock.json");
-                    return false;
-                }
-                
-                string currentHash = currentHashMatch.Groups[1].Value;
-                Debug.Log($"[Version Check] Current hash from packages-lock.json: {currentHash}");
-
-                // Get the latest commit hash from GitHub API
+                // Get the latest version from GitHub
                 using (var client = new HttpClient())
                 {
-                    client.DefaultRequestHeaders.Add("User-Agent", "Unity");
-                    var response = await client.GetAsync("https://api.github.com/repos/BrendanRobins97/TranslationDoneRight/commits/main");
-                    if (!response.IsSuccessStatusCode)
+                    client.DefaultRequestHeaders.UserAgent.ParseAdd("Unity/1.0");
+                    
+                    // Get the latest release version from GitHub API
+                    var response = await client.GetAsync("https://api.github.com/repos/BrendanRobins97/TranslationDoneRight/releases/latest");
+                    if (response.IsSuccessStatusCode)
                     {
-                        Debug.LogError($"[Version Check] GitHub API request failed with status: {response.StatusCode}");
-                        return false;
+                        var content = await response.Content.ReadAsStringAsync();
+                        var versionMatch = Regex.Match(content, "\"tag_name\":\\s*\"v([^\"]+)\"");
+                        if (versionMatch.Success)
+                        {
+                            string latestVersion = versionMatch.Groups[1].Value;
+                            Debug.Log($"[Version Check] Current version: {currentVersion}, Latest version: {latestVersion}");
+                            
+                            // Compare versions
+                            var current = new Version(currentVersion);
+                            var latest = new Version(latestVersion);
+                            
+                            return latest > current;
+                        }
                     }
-
-                    var content = await response.Content.ReadAsStringAsync();
-                    var remoteHashMatch = Regex.Match(content, "\"sha\":\\s*\"([a-f0-9]+)\"");
-                    if (!remoteHashMatch.Success)
+                    else
                     {
-                        Debug.LogError("[Version Check] Could not find commit hash in GitHub API response");
-                        return false;
+                        Debug.LogError($"[Version Check] Failed to get latest release: {response.StatusCode}");
                     }
-
-                    string remoteHash = remoteHashMatch.Groups[1].Value;
-                    Debug.Log($"[Version Check] Remote hash from GitHub: {remoteHash}");
-
-                    bool hasChanges = currentHash != remoteHash;
-                    Debug.Log($"[Version Check] Has changes: {hasChanges}");
-                    return hasChanges;
                 }
+
+                return false;
             }
             catch (Exception e)
             {
-                Debug.LogError($"[Version Check] Error checking for updates: {e.Message}\nStack trace: {e.StackTrace}");
+                Debug.LogError($"[Version Check] Error checking for updates: {e.Message}");
                 return false;
             }
         }

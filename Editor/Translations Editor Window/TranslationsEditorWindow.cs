@@ -48,10 +48,16 @@ namespace Translations
 
         private TranslationMetadata translationMetadata;
 
-        [MenuItem("Window/Translations")]
+        [MenuItem("Window/Translations/Open Translations Manager")]
         public static void ShowWindow()
         {
             GetWindow<TranslationsEditorWindow>("Translations Manager");
+        }
+
+        [MenuItem("Window/Translations/Check for Updates")]
+        public static void CheckForUpdates()
+        {
+            VersionManager.ShowUpdateNotificationIfNeeded();
         }
 
         private void OnEnable()
@@ -83,6 +89,9 @@ namespace Translations
             TextExtractor.OnExtractionError += HandleExtractionError;
             TextExtractor.OnExtractorStarted += HandleExtractorStarted;
             TextExtractor.OnExtractorFinished += HandleExtractorFinished;
+
+            // Check for updates
+            VersionManager.ShowUpdateNotificationIfNeeded();
         }
 
         private void OnDisable()

@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEditor;
+using System.Collections.Generic;
 
 namespace Translations
 {
@@ -7,57 +8,84 @@ namespace Translations
     {
         private void DrawSettingsTab()
         {
-            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            EditorGUILayout.BeginVertical();
             
+            // Update Notifications
+            EditorGUILayout.Space(10);
+            EditorGUILayout.LabelField("Update Notifications", EditorStyles.boldLabel);
+            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
+            {
+                bool showNotifications = VersionManager.ShouldShowUpdateNotification;
+                bool newValue = EditorGUILayout.ToggleLeft(
+                    new GUIContent(
+                        "Show update notifications",
+                        "Show a notification when a new version of Translations Done Right is available"
+                    ),
+                    showNotifications
+                );
+                
+                if (newValue != showNotifications)
+                {
+                    VersionManager.ShouldShowUpdateNotification = newValue;
+                }
+
+                EditorGUILayout.Space(5);
+                
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    EditorGUILayout.LabelField($"Current Version: {VersionManager.CurrentVersion}");
+                    if (GUILayout.Button("Check for Updates", GUILayout.Width(120)))
+                    {
+                        VersionManager.ShowUpdateNotificationIfNeeded();
+                    }
+                }
+            }
+
+            // Translation Settings
+            EditorGUILayout.Space(20);
             EditorGUILayout.LabelField("Translation Settings", EditorStyles.boldLabel);
-            EditorGUILayout.Space(5);
-
-            // Auto-translation settings
-            EditorGUILayout.LabelField("Auto-Translation", EditorStyles.boldLabel);
-            autoTranslateEnabled = EditorGUILayout.ToggleLeft("Enable Auto-Translation", autoTranslateEnabled);
-            
-            if (autoTranslateEnabled)
+            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
             {
-                EditorGUI.indentLevel++;
-                apiKey = EditorGUILayout.TextField("API Key:", apiKey);
-                EditorGUI.indentLevel--;
+                // DeepL Settings
+                EditorGUILayout.LabelField("DeepL Translation Settings", EditorStyles.boldLabel);
+                deeplApiKey = EditorGUILayout.TextField("DeepL API Key", deeplApiKey);
+                useDeepLPro = EditorGUILayout.Toggle("Use DeepL Pro", useDeepLPro);
+                includeContextInTranslation = EditorGUILayout.Toggle(
+                    new GUIContent(
+                        "Include Context",
+                        "Include context information when translating text"
+                    ),
+                    includeContextInTranslation
+                );
+                preserveFormatting = EditorGUILayout.Toggle(
+                    new GUIContent(
+                        "Preserve Formatting",
+                        "Preserve text formatting during translation"
+                    ),
+                    preserveFormatting
+                );
+                formalityPreference = EditorGUILayout.Toggle(
+                    new GUIContent(
+                        "Prefer Formal",
+                        "Use formal language in translations when possible"
+                    ),
+                    formalityPreference
+                );
             }
-
-            EditorGUILayout.Space(10);
-
-            // Font settings
-            EditorGUILayout.LabelField("Font Management", EditorStyles.boldLabel);
-            if (GUILayout.Button("Manage Fonts"))
-            {
-                // Open font management window
-            }
-
-            EditorGUILayout.Space(10);
-
-            // Backup settings
-            EditorGUILayout.LabelField("Backup Settings", EditorStyles.boldLabel);
-            EditorGUILayout.BeginHorizontal();
-            if (GUILayout.Button("Create Backup"))
-            {
-                // Backup implementation
-            }
-            if (GUILayout.Button("Restore from Backup"))
-            {
-                // Restore implementation
-            }
-            EditorGUILayout.EndHorizontal();
-
-            EditorGUILayout.Space(10);
 
             // Development tools
+            EditorGUILayout.Space(20);
             EditorGUILayout.LabelField("Development Tools", EditorStyles.boldLabel);
-            if (GUILayout.Button("Validate All Translations"))
+            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
             {
-                // Validation implementation
-            }
-            if (GUILayout.Button("Clean Unused Keys"))
-            {
-                // Cleanup implementation
+                if (GUILayout.Button("Validate All Translations"))
+                {
+                    // Validation implementation
+                }
+                if (GUILayout.Button("Clean Unused Keys"))
+                {
+                    // Cleanup implementation
+                }
             }
             
             EditorGUILayout.EndVertical();

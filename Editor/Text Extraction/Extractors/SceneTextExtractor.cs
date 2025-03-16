@@ -134,28 +134,21 @@ namespace Translations
         
         private void ProcessScene(string scenePath, HashSet<string> extractedText, TranslationMetadata metadata)
         {
-            Debug.Log($"[SceneTextExtractor] Starting to process scene: {scenePath}");
             var sceneSetup = EditorSceneManager.GetSceneManagerSetup();
             
             try
             {
                 Scene scene = SceneManager.GetSceneByPath(scenePath);
-                Debug.Log($"[SceneTextExtractor] Got scene by path. IsValid: {scene.IsValid()}, IsLoaded: {scene.isLoaded}");
 
                 if (!scene.isLoaded)
                 {
-                    Debug.Log($"[SceneTextExtractor] Loading scene: {scenePath}");
                     scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
-                    Debug.Log($"[SceneTextExtractor] Scene loaded. IsValid: {scene.IsValid()}, IsLoaded: {scene.isLoaded}");
                 }
 
                 // Extract TextMeshPro texts
                 try 
                 {
-                    Debug.Log($"[SceneTextExtractor] Starting TMP extraction in scene: {scenePath}");
                     TextMeshProUGUI[] textMeshProObjects = GameObject.FindObjectsOfType<TextMeshProUGUI>(true);
-                    Debug.Log($"[SceneTextExtractor] Found {textMeshProObjects.Length} TMP objects");
-                    
                     foreach (TextMeshProUGUI textObject in textMeshProObjects)
                     {
                         if (textObject == null)
@@ -166,15 +159,11 @@ namespace Translations
                         
                         try
                         {
-                            Debug.Log($"[SceneTextExtractor] Processing TMP object: {GetGameObjectPath(textObject.gameObject)}");
                             if (textObject.GetComponent<DynamicTMP>())
-                            {
-                                Debug.Log($"[SceneTextExtractor] Skipping DynamicTMP object: {GetGameObjectPath(textObject.gameObject)}");
                                 continue;
-                            }
+
                             if (!string.IsNullOrWhiteSpace(textObject.text))
                             {
-                                Debug.Log($"[SceneTextExtractor] Found text in TMP: '{textObject.text}' at {GetGameObjectPath(textObject.gameObject)}");
                                 extractedText.Add(textObject.text);
                                 
                                 var sourceInfo = new TextSourceInfo
@@ -202,10 +191,7 @@ namespace Translations
                 // Extract UI Text texts
                 try
                 {
-                    Debug.Log($"[SceneTextExtractor] Starting UI Text extraction in scene: {scenePath}");
                     Text[] uiTextObjects = GameObject.FindObjectsOfType<Text>(true);
-                    Debug.Log($"[SceneTextExtractor] Found {uiTextObjects.Length} UI Text objects");
-                    
                     foreach (Text uiText in uiTextObjects)
                     {
                         if (uiText == null)
@@ -216,15 +202,11 @@ namespace Translations
 
                         try
                         {
-                            Debug.Log($"[SceneTextExtractor] Processing UI Text object: {GetGameObjectPath(uiText.gameObject)}");
                             if (uiText.GetComponent<DynamicTMP>())
-                            {
-                                Debug.Log($"[SceneTextExtractor] Skipping DynamicTMP UI Text object: {GetGameObjectPath(uiText.gameObject)}");
                                 continue;
-                            }
+
                             if (!string.IsNullOrWhiteSpace(uiText.text))
                             {
-                                Debug.Log($"[SceneTextExtractor] Found text in UI Text: '{uiText.text}' at {GetGameObjectPath(uiText.gameObject)}");
                                 extractedText.Add(uiText.text);
                                 
                                 var sourceInfo = new TextSourceInfo
@@ -252,15 +234,11 @@ namespace Translations
                 // Extract fields marked with TranslatedAttribute
                 try
                 {
-                    Debug.Log($"[SceneTextExtractor] Starting component extraction in scene: {scenePath}");
                     var rootObjects = scene.GetRootGameObjects();
-                    Debug.Log($"[SceneTextExtractor] Found {rootObjects.Length} root GameObjects");
-                    
                     foreach (GameObject rootObj in rootObjects)
                     {
                         try
                         {
-                            Debug.Log($"[SceneTextExtractor] Processing root GameObject: {rootObj.name}");
                             ExtractFromGameObject(rootObj, extractedText, metadata, scenePath);
                         }
                         catch (System.Exception e)
@@ -280,7 +258,6 @@ namespace Translations
             }
             finally
             {
-                Debug.Log($"[SceneTextExtractor] Finished processing scene: {scenePath}. Restoring scene setup...");
                 RestoreSceneSetup(sceneSetup);
             }
         }
@@ -289,10 +266,7 @@ namespace Translations
         {
             try
             {
-                Debug.Log($"[SceneTextExtractor] Getting components from GameObject: {GetGameObjectPath(obj)}");
                 Component[] components = obj.GetComponents<Component>();
-                Debug.Log($"[SceneTextExtractor] Found {components.Length} components on {GetGameObjectPath(obj)}");
-                
                 foreach (Component component in components)
                 {
                     if (component == null)
@@ -303,7 +277,6 @@ namespace Translations
 
                     try
                     {
-                        Debug.Log($"[SceneTextExtractor] Processing component {component.GetType().Name} on {GetGameObjectPath(obj)}");
                         TranslationExtractionHelper.ExtractTranslationsFromObject(
                             component, 
                             extractedText, 
@@ -322,7 +295,6 @@ namespace Translations
                 {
                     try
                     {
-                        Debug.Log($"[SceneTextExtractor] Processing child GameObject: {GetGameObjectPath(child.gameObject)}");
                         ExtractFromGameObject(child.gameObject, extractedText, metadata, scenePath);
                     }
                     catch (System.Exception e)

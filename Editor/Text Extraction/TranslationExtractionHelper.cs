@@ -349,7 +349,7 @@ namespace Translations
                             itemCount++;
                     }
                     catch (System.Exception ex) {
-                        Debug.LogError($"Error counting items in {field.Name}: {ex.Message}");
+                        Debug.LogWarning($"Error counting items in {field.Name}: {ex.Message}");
                     }
                 }
 
@@ -386,7 +386,7 @@ namespace Translations
                     }
                     catch (Exception ex)
                     {
-                        Debug.LogError($"Error processing dictionary field {field.Name}: {ex.Message}");
+                        Debug.LogWarning($"Error processing dictionary field {field.Name}: {ex.Message}");
                     }
                 }
                 else if (typeof(IEnumerable).IsAssignableFrom(field.FieldType) && field.FieldType != typeof(string))
@@ -463,7 +463,7 @@ namespace Translations
                     }
                     catch (System.Exception ex)
                     {
-                        Debug.LogError($"Error processing items in collection {field.Name}: {ex.Message}\n{ex.StackTrace}");
+                        Debug.LogWarning($"Error processing items in collection {field.Name}: {ex.Message}\n{ex.StackTrace}");
                     }
                 }
                 else if (!field.FieldType.IsPrimitive && !field.FieldType.IsEnum)
@@ -473,7 +473,7 @@ namespace Translations
             }
             catch (System.Exception ex)
             {
-                Debug.LogError($"Error extracting field {field.Name}: {ex.Message}");
+                Debug.LogWarning($"Error extracting field {field.Name}: {ex.Message}");
             }
         }
 
@@ -516,7 +516,7 @@ namespace Translations
                         visitedObjects.Clear();
                     }
                     catch (System.Exception ex) {
-                        Debug.LogError($"Error counting items in property {property.Name}: {ex.Message}");
+                        Debug.LogWarning($"Error counting items in property {property.Name}: {ex.Message}");
                     }
                 }
 
@@ -598,7 +598,7 @@ namespace Translations
                     }
                     catch (System.Exception ex)
                     {
-                        Debug.LogError($"Error processing items in collection property {property.Name}: {ex.Message}\n{ex.StackTrace}");
+                        Debug.LogWarning($"Error processing items in collection property {property.Name}: {ex.Message}\n{ex.StackTrace}");
                     }
                 }
                 else if (!property.PropertyType.IsPrimitive && !property.PropertyType.IsEnum)
@@ -608,7 +608,7 @@ namespace Translations
             }
             catch (System.Exception ex)
             {
-                Debug.LogError($"Error extracting property {property.Name}: {ex.Message}");
+                Debug.LogWarning($"Error extracting property {property.Name}: {ex.Message}");
             }
         }
 

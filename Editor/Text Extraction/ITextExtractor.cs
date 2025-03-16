@@ -41,6 +41,14 @@ namespace Translations
         bool DrawCustomInspectorGUI() => false;
 
         /// <summary>
+        /// Report progress for the current extraction operation (0-1 range)
+        /// </summary>
+        protected static void ReportProgress(ITextExtractor extractor, float progress)
+        {
+            TextExtractor.UpdateExtractorProgress(extractor, progress);
+        }
+
+        /// <summary>
         /// Gets the relevant sources for this extractor
         /// </summary>
         /// <param name="metadata">The metadata containing sources</param>

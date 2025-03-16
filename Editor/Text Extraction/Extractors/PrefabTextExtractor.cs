@@ -20,7 +20,7 @@ namespace Translations
         {
             var extractedText = new HashSet<string>();
             
-            return ITextExtractor.ProcessSourcesOrAll<string[]>(
+            return ITextExtractor.ProcessSourcesOrAll<HashSet<string>>(
                 this,
                 metadata,
                 () => {
@@ -37,9 +37,13 @@ namespace Translations
             );
         }
         
-        private void ProcessSourceList(ExtractionSourcesList sources, HashSet<string> extractedText, TranslationMetadata metadata)
+        private void ProcessSourceList(List<ExtractionSource> sources, HashSet<string> extractedText, TranslationMetadata metadata)
         {
-            foreach (var source in sources.Items)
+            var allPrefabGuids = new List<string>();
+            float sourceProgress = 0f;
+            float sourceIncrement = 1f / sources.Count;
+
+            foreach (var source in sources)
             {
                 string searchFolder = source.type == ExtractionSourceType.Folder ? source.folderPath : Path.GetDirectoryName(AssetDatabase.GetAssetPath(source.asset));
                 
@@ -51,37 +55,37 @@ namespace Translations
                     searchFolder = "Assets/" + searchFolder;
                 
                 string[] prefabGuids = AssetDatabase.FindAssets("t:Prefab", new[] { searchFolder });
-                ProcessPrefabs(prefabGuids, extractedText, metadata);
+                allPrefabGuids.AddRange(prefabGuids);
+                
+                sourceProgress += sourceIncrement;
+                ITextExtractor.ReportProgress(this, sourceProgress * 0.1f); // First 10% for finding prefabs
             }
+
+            ProcessPrefabs(allPrefabGuids.ToArray(), extractedText, metadata, 0.1f); // Remaining 90% for processing
         }
         
-        private void ProcessPrefabs(string[] prefabGuids, HashSet<string> extractedText, TranslationMetadata metadata)
+        private void ProcessPrefabs(string[] prefabGuids, HashSet<string> extractedText, TranslationMetadata metadata, float progressOffset = 0f)
         {
-            Debug.Log($"[PrefabTextExtractor] Starting to process {prefabGuids.Length} prefabs");
-            
-            foreach (string guid in prefabGuids)
+            float progressIncrement = (1f - progressOffset) / prefabGuids.Length;
+            float currentProgress = progressOffset;
+
+            for (int i = 0; i < prefabGuids.Length; i++)
             {
+                string guid = prefabGuids[i];
                 try
                 {
                     string path = AssetDatabase.GUIDToAssetPath(guid);
-                    Debug.Log($"[PrefabTextExtractor] Processing prefab at path: {path}");
-                    
                     GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
                     if (prefab == null)
                     {
                         Debug.LogWarning($"[PrefabTextExtractor] Failed to load prefab at path: {path}");
                         continue;
                     }
-                    
-                    Debug.Log($"[PrefabTextExtractor] Successfully loaded prefab: {prefab.name}");
 
                     // Extract TextMeshPro texts
                     try
                     {
-                        Debug.Log($"[PrefabTextExtractor] Starting TMP extraction in prefab: {prefab.name}");
                         var tmpTexts = prefab.GetComponentsInChildren<TextMeshProUGUI>(true);
-                        Debug.Log($"[PrefabTextExtractor] Found {tmpTexts.Length} TMP objects in {prefab.name}");
-                        
                         foreach (TextMeshProUGUI textObject in tmpTexts)
                         {
                             if (textObject == null)
@@ -92,15 +96,11 @@ namespace Translations
                             
                             try
                             {
-                                Debug.Log($"[PrefabTextExtractor] Processing TMP object: {GetGameObjectPath(textObject.gameObject)}");
                                 if (textObject.GetComponent<DynamicTMP>())
-                                {
-                                    Debug.Log($"[PrefabTextExtractor] Skipping DynamicTMP object: {GetGameObjectPath(textObject.gameObject)}");
                                     continue;
-                                }
+
                                 if (!string.IsNullOrWhiteSpace(textObject.text))
                                 {
-                                    Debug.Log($"[PrefabTextExtractor] Found text in TMP: '{textObject.text}' at {GetGameObjectPath(textObject.gameObject)}");
                                     extractedText.Add(textObject.text);
                                     
                                     var sourceInfo = new TextSourceInfo
@@ -128,10 +128,7 @@ namespace Translations
                     // Extract UI Text texts
                     try
                     {
-                        Debug.Log($"[PrefabTextExtractor] Starting UI Text extraction in prefab: {prefab.name}");
                         var uiTexts = prefab.GetComponentsInChildren<Text>(true);
-                        Debug.Log($"[PrefabTextExtractor] Found {uiTexts.Length} UI Text objects in {prefab.name}");
-                        
                         foreach (Text uiText in uiTexts)
                         {
                             if (uiText == null)
@@ -142,15 +139,11 @@ namespace Translations
                             
                             try
                             {
-                                Debug.Log($"[PrefabTextExtractor] Processing UI Text object: {GetGameObjectPath(uiText.gameObject)}");
                                 if (uiText.GetComponent<DynamicTMP>())
-                                {
-                                    Debug.Log($"[PrefabTextExtractor] Skipping DynamicTMP UI Text object: {GetGameObjectPath(uiText.gameObject)}");
                                     continue;
-                                }
+
                                 if (!string.IsNullOrWhiteSpace(uiText.text))
                                 {
-                                    Debug.Log($"[PrefabTextExtractor] Found text in UI Text: '{uiText.text}' at {GetGameObjectPath(uiText.gameObject)}");
                                     extractedText.Add(uiText.text);
                                     
                                     var sourceInfo = new TextSourceInfo
@@ -178,10 +171,7 @@ namespace Translations
                     // Extract fields marked with [Translated] attribute from all components
                     try
                     {
-                        Debug.Log($"[PrefabTextExtractor] Starting component extraction in prefab: {prefab.name}");
                         Component[] allComponents = prefab.GetComponentsInChildren<Component>(true);
-                        Debug.Log($"[PrefabTextExtractor] Found {allComponents.Length} components in {prefab.name}");
-                        
                         foreach (Component component in allComponents)
                         {
                             if (component == null)
@@ -200,7 +190,6 @@ namespace Translations
                                     continue;
                                 }
 
-                                Debug.Log($"[PrefabTextExtractor] Processing component {component.GetType().Name} on {GetGameObjectPath(component.gameObject)}");
                                 TranslationExtractionHelper.ExtractTranslationsFromObject(
                                     component,
                                     extractedText,
@@ -225,9 +214,10 @@ namespace Translations
                 {
                     Debug.LogError($"[PrefabTextExtractor] Failed to process prefab with GUID {guid}: {e.Message}\nStack trace: {e.StackTrace}");
                 }
+
+                currentProgress += progressIncrement;
+                ITextExtractor.ReportProgress(this, currentProgress);
             }
-            
-            Debug.Log($"[PrefabTextExtractor] Finished processing all prefabs");
         }
 
         private string GetGameObjectPath(GameObject obj)

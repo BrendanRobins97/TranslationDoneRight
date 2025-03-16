@@ -50,10 +50,41 @@ namespace Translations
         private static string _currentExtractorName = string.Empty;
         private static Dictionary<string, float> _extractorProgress = new Dictionary<string, float>();
         private static bool _isExtractionRunning = false;
+        private static float _baseProgress = 0f;
+        private static float _progressIncrement = 0f;
 
         public static float ExtractionProgress => _extractionProgress;
         public static string CurrentExtractorName => _currentExtractorName;
         public static bool IsExtractionRunning => _isExtractionRunning;
+
+        /// <summary>
+        /// Updates the progress of the current extractor (0-1 range)
+        /// </summary>
+        public static void UpdateExtractorProgress(ITextExtractor extractor, float progress)
+        {
+            if (!_isExtractionRunning) return;
+            
+            lock (_progressLock)
+            {
+                // Ensure progress is in valid range
+                progress = Mathf.Clamp01(progress);
+                
+                // Calculate overall progress as base progress + (current extractor's progress * increment)
+                _extractionProgress = _baseProgress + (progress * _progressIncrement);
+                _currentExtractorName = extractor.GetType().Name;
+                _extractorProgress[_currentExtractorName] = progress;
+            }
+            
+            // Update the UI from the main thread
+            if (EditorApplication.isPlaying)
+            {
+                EditorApplication.delayCall += UpdateExtractionProgressUI;
+            }
+            else
+            {
+                UpdateExtractionProgressUI();
+            }
+        }
 
         /// <summary>
         /// Updates the UI on the main thread during extraction
@@ -71,9 +102,8 @@ namespace Translations
                     currentProgress = _extractionProgress;
                 }
                 
-                // This is safe to call since it's on the main thread
                 EditorUtility.DisplayProgressBar("Extracting Text", 
-                    $"Running {currentName}...", currentProgress);
+                    $"Running {currentName}... ({(currentProgress * 100):F0}%)", currentProgress);
             }
         }
 
@@ -86,21 +116,26 @@ namespace Translations
             {
                 _isExtractionRunning = false;
                 _extractionProgress = 0f;
+                _baseProgress = 0f;
+                _progressIncrement = 0f;
                 _currentExtractorName = string.Empty;
                 _extractorProgress.Clear();
             }
         }
 
         /// <summary>
-        /// Updates extraction progress in a thread-safe way
+        /// Sets up progress tracking for a new extractor
         /// </summary>
-        private static void SetExtractionProgress(ITextExtractor extractor, float progress)
+        private static void SetupExtractorProgress(ITextExtractor extractor, float baseProgress, float increment)
         {
             lock (_progressLock)
             {
                 _isExtractionRunning = true;
                 _currentExtractorName = extractor.GetType().Name;
-                _extractionProgress = progress;
+                _baseProgress = baseProgress;
+                _progressIncrement = increment;
+                _extractionProgress = baseProgress;
+                _extractorProgress[_currentExtractorName] = 0f;
             }
         }
 
@@ -177,10 +212,8 @@ namespace Translations
             // Process each extractor sequentially to avoid threading issues with Unity API
             foreach (var extractor in enabledExtractors)
             {
-                SetExtractionProgress(extractor, currentProgress);
-                UpdateExtractionProgressUI();
+                SetupExtractorProgress(extractor, currentProgress, progressIncrement);
                 OnExtractorStarted?.Invoke(extractor);
-                currentProgress += progressIncrement;
                 
                 try
                 {
@@ -203,6 +236,8 @@ namespace Translations
                     OnExtractionError?.Invoke(extractor, e);
                     Debug.LogError($"Error in {extractor.GetType().Name}: {e.Message}\n{e.StackTrace}");
                 }
+
+                currentProgress += progressIncrement;
             }
 
             // Final check for similar texts across all extractors
@@ -510,10 +545,8 @@ namespace Translations
             // Process each extractor sequentially to avoid threading issues with Unity's API
             foreach (var extractor in targetExtractors)
             {
-                SetExtractionProgress(extractor, currentProgress);
-                UpdateExtractionProgressUI();
+                SetupExtractorProgress(extractor, currentProgress, progressIncrement);
                 OnExtractorStarted?.Invoke(extractor);
-                currentProgress += progressIncrement;
                 
                 try 
                 {
@@ -531,6 +564,8 @@ namespace Translations
                     OnExtractionError?.Invoke(extractor, e);
                     Debug.LogError($"Error in {extractor.GetType().Name}: {e.Message}\n{e.StackTrace}");
                 }
+
+                currentProgress += progressIncrement;
             }
 
             if (anyExtractorFound)

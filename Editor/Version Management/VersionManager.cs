@@ -80,7 +80,17 @@ namespace Translations
 
         private static string GetPackagePath()
         {
-            return Path.GetFullPath(Path.Combine(Application.dataPath, "Translations Done Right"));
+            // First check if the package is in the Assets folder
+            string assetsPath = Path.GetFullPath(Path.Combine(Application.dataPath, "Translations Done Right"));
+            if (Directory.Exists(assetsPath))
+            {
+                return assetsPath;
+            }
+
+            // If not in Assets, it must be in the package cache
+            // We don't need the actual path for Git operations when using package cache
+            // since we'll be using packages-lock.json instead
+            return null;
         }
 
         private static async Task<string> ExecuteGitCommand(string command, string workingDir)
@@ -225,36 +235,82 @@ namespace Translations
 
         private static async Task<bool> HasRemoteChanges(string workingDir)
         {
-            var (currentHash, remoteHash) = await GetPackageHashes();
-            
-            if (currentHash == null || remoteHash == null)
+            try
             {
-                Debug.LogError("[Version Check] Failed to get package hashes");
+                // Find the packages-lock.json file in the Unity project root
+                string projectPath = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
+                string packagesLockPath = Path.Combine(projectPath, "packages-lock.json");
+                
+                if (!File.Exists(packagesLockPath))
+                {
+                    Debug.LogError("[Version Check] packages-lock.json not found");
+                    return false;
+                }
+
+                // Read and parse the packages-lock.json file
+                string jsonContent = File.ReadAllText(packagesLockPath);
+                // Unity's JsonUtility doesn't handle dictionary deserialization well, so we'll use string parsing
+                if (!jsonContent.Contains("\"com.flamboozle.translations-done-right\""))
+                {
+                    Debug.LogError("[Version Check] Package not found in packages-lock.json");
+                    return false;
+                }
+
+                // Use a simple HTTP client to check the latest commit from GitHub
+                using (var client = new HttpClient())
+                {
+                    client.DefaultRequestHeaders.Add("User-Agent", "Unity");
+                    var response = await client.GetAsync("https://api.github.com/repos/BrendanRobins97/TranslationDoneRight/commits/main");
+                    if (response.IsSuccessStatusCode)
+                    {
+                        var content = await response.Content.ReadAsStringAsync();
+                        // Extract the SHA from the response
+                        var match = Regex.Match(content, "\"sha\":\\s*\"([a-f0-9]+)\"");
+                        if (match.Success)
+                        {
+                            string remoteHash = match.Groups[1].Value;
+                            
+                            // Now find the current hash in packages-lock.json
+                            match = Regex.Match(jsonContent, "\"com.flamboozle.translations-done-right\"[^}]+\"hash\":\\s*\"([a-f0-9]+)\"");
+                            if (match.Success)
+                            {
+                                string currentHash = match.Groups[1].Value;
+                                Debug.Log($"[Version Check] Current hash: {currentHash}");
+                                Debug.Log($"[Version Check] Remote hash: {remoteHash}");
+                                return currentHash != remoteHash;
+                            }
+                        }
+                    }
+                }
+
                 return false;
             }
-
-            bool hasChanges = currentHash != remoteHash;
-            Debug.Log($"[Version Check] Has remote changes: {hasChanges}");
-            return hasChanges;
+            catch (Exception e)
+            {
+                Debug.LogError($"[Version Check] Error checking for updates: {e.Message}");
+                return false;
+            }
         }
 
         private static async Task<string> GetRemoteChangelogContent(string workingDir)
         {
             try
             {
-                return await ExecuteGitCommand("show origin/main:CHANGELOG.md", workingDir);
+                using (var client = new HttpClient())
+                {
+                    client.DefaultRequestHeaders.Add("User-Agent", "Unity");
+                    var response = await client.GetAsync("https://raw.githubusercontent.com/BrendanRobins97/TranslationDoneRight/main/CHANGELOG.md");
+                    if (response.IsSuccessStatusCode)
+                    {
+                        return await response.Content.ReadAsStringAsync();
+                    }
+                }
+                return null;
             }
-            catch
+            catch (Exception e)
             {
-                try
-                {
-                    return await ExecuteGitCommand("show origin/master:CHANGELOG.md", workingDir);
-                }
-                catch (Exception e)
-                {
-                    Debug.LogError($"Error getting remote changelog: {e.Message}");
-                    return null;
-                }
+                Debug.LogError($"Error getting remote changelog: {e.Message}");
+                return null;
             }
         }
 
@@ -262,40 +318,34 @@ namespace Translations
         {
             try
             {
-                Debug.Log("[Version Check] Attempting to get package.json from main branch...");
-                string packageJson = await ExecuteGitCommand("show origin/main:package.json", workingDir);
-                var remotePackageInfo = JsonUtility.FromJson<PackageInfo>(packageJson);
-                return remotePackageInfo.version;
+                using (var client = new HttpClient())
+                {
+                    client.DefaultRequestHeaders.Add("User-Agent", "Unity");
+                    var response = await client.GetAsync("https://raw.githubusercontent.com/BrendanRobins97/TranslationDoneRight/main/package.json");
+                    if (response.IsSuccessStatusCode)
+                    {
+                        string packageJson = await response.Content.ReadAsStringAsync();
+                        var remotePackageInfo = JsonUtility.FromJson<PackageInfo>(packageJson);
+                        return remotePackageInfo.version;
+                    }
+                }
+                return null;
             }
-            catch
+            catch (Exception e)
             {
-                try
-                {
-                    Debug.Log("[Version Check] Attempting to get package.json from master branch...");
-                    string packageJson = await ExecuteGitCommand("show origin/master:package.json", workingDir);
-                    var remotePackageInfo = JsonUtility.FromJson<PackageInfo>(packageJson);
-                    return remotePackageInfo.version;
-                }
-                catch (Exception e)
-                {
-                    Debug.LogError($"[Version Check] Error getting remote package version: {e.Message}");
-                    return null;
-                }
+                Debug.LogError($"[Version Check] Error getting remote package version: {e.Message}");
+                return null;
             }
         }
 
         public static async Task<VersionInfo> CheckForUpdates()
         {
             string packagePath = GetPackagePath();
-            Debug.Log($"[Version Check] Starting version check in path: {packagePath}");
+            Debug.Log($"[Version Check] Starting version check...");
             
             try
             {
-                // Fetch latest changes from remote
-                Debug.Log("[Version Check] Fetching latest changes from remote...");
-                await FetchLatestChanges(packagePath);
-
-                // Check if we have any updates
+                // Check if we have any updates using packages-lock.json and GitHub API
                 Debug.Log("[Version Check] Checking for remote changes...");
                 if (!await HasRemoteChanges(packagePath))
                 {
@@ -344,9 +394,28 @@ namespace Translations
                 }
                 Debug.Log($"[Version Check] Found matching changelog entry for version {matchingEntry.Version}");
 
-                // Get remote commit hash
-                string remoteHash = await GetRemoteCommitHash(packagePath);
-                Debug.Log($"[Version Check] Remote commit hash: {remoteHash}");
+                // Get the latest commit hash from GitHub API
+                string remoteHash = null;
+                using (var client = new HttpClient())
+                {
+                    client.DefaultRequestHeaders.Add("User-Agent", "Unity");
+                    var response = await client.GetAsync("https://api.github.com/repos/BrendanRobins97/TranslationDoneRight/commits/main");
+                    if (response.IsSuccessStatusCode)
+                    {
+                        var content = await response.Content.ReadAsStringAsync();
+                        var match = Regex.Match(content, "\"sha\":\\s*\"([a-f0-9]+)\"");
+                        if (match.Success)
+                        {
+                            remoteHash = match.Groups[1].Value;
+                        }
+                    }
+                }
+
+                if (string.IsNullOrEmpty(remoteHash))
+                {
+                    Debug.LogError("[Version Check] Failed to get remote commit hash");
+                    return null;
+                }
 
                 // Create version info from changelog
                 var versionInfo = new VersionInfo

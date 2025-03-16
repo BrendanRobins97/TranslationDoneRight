@@ -120,6 +120,8 @@ namespace Translations
         private void ProcessSourceList(ExtractionSourcesList sources, HashSet<string> extractedText, TranslationMetadata metadata)
         {
             List<string> scriptGuids = new List<string>();
+            float sourceProgress = 0f;
+            float sourceIncrement = 1f / sources.Items.Count;
             
             foreach (var source in sources.Items)
             {
@@ -133,18 +135,23 @@ namespace Translations
 
                 string[] guids = AssetDatabase.FindAssets("t:Script", new[] { searchFolder });
                 scriptGuids.AddRange(guids);
+                
+                sourceProgress += sourceIncrement;
+                ITextExtractor.ReportProgress(this, sourceProgress * 0.1f); // First 10% for finding scripts
             }
             
-            ProcessScripts(scriptGuids.ToArray(), extractedText, metadata);
+            ProcessScripts(scriptGuids.ToArray(), extractedText, metadata, 0.1f); // Remaining 90% for processing scripts
         }
 
-        private void ProcessScripts(string[] scriptGuids, HashSet<string> extractedText, TranslationMetadata metadata)
+        private void ProcessScripts(string[] scriptGuids, HashSet<string> extractedText, TranslationMetadata metadata, float progressOffset = 0f)
         {
             if (scriptGuids.Length == 0) return;
             
             // Process scripts in batches for better performance
             int batchSize = 100;
             int batches = (scriptGuids.Length + batchSize - 1) / batchSize;
+            float batchIncrement = (1f - progressOffset) / batches;
+            float progress = progressOffset;
             
             for (int batch = 0; batch < batches; batch++)
             {
@@ -316,6 +323,9 @@ namespace Translations
                 {
                     metadata.AddSource(pair.Key, pair.Value);
                 }
+                
+                progress += batchIncrement;
+                ITextExtractor.ReportProgress(this, progress);
             }
         }
     }

@@ -91,6 +91,9 @@ namespace Translations
         
         private void ProcessScenesBySource(ExtractionSourcesList sources, HashSet<string> extractedText, TranslationMetadata metadata)
         {
+            float sourceProgress = 0f;
+            float sourceIncrement = 1f / sources.Items.Count;
+
             foreach (var source in sources.Items)
             {
                 if (source.type == ExtractionSourceType.Asset && source.asset != null)
@@ -114,21 +117,33 @@ namespace Translations
                         searchFolder = "Assets/" + searchFolder;
                     
                     string[] sceneGuids = AssetDatabase.FindAssets("t:Scene", new[] { searchFolder });
+                    float sceneIncrement = sourceIncrement / (sceneGuids.Length > 0 ? sceneGuids.Length : 1);
+                    float sceneProgress = 0f;
+                    
                     foreach (string guid in sceneGuids)
                     {
                         string scenePath = AssetDatabase.GUIDToAssetPath(guid);
                         ProcessScene(scenePath, extractedText, metadata);
+                        sceneProgress += sceneIncrement;
+                        ITextExtractor.ReportProgress(this, sourceProgress + sceneProgress);
                     }
                 }
+                sourceProgress += sourceIncrement;
+                ITextExtractor.ReportProgress(this, sourceProgress);
             }
         }
         
         private void ProcessScenes(EditorBuildSettingsScene[] scenes, HashSet<string> extractedText, TranslationMetadata metadata)
         {
+            float sceneIncrement = 1f / (scenes.Length > 0 ? scenes.Length : 1);
+            float progress = 0f;
+
             foreach (var sceneSettings in scenes)
             {
                 string scenePath = sceneSettings.path;
                 ProcessScene(scenePath, extractedText, metadata);
+                progress += sceneIncrement;
+                ITextExtractor.ReportProgress(this, progress);
             }
         }
         
@@ -335,11 +350,17 @@ namespace Translations
             var sceneEntries = settings.groups
                 .Where(g => g != null)
                 .SelectMany(g => g.entries)
-                .Where(e => e != null && e.AssetPath.EndsWith(".unity"));
+                .Where(e => e != null && e.AssetPath.EndsWith(".unity"))
+                .ToList();
+
+            float sceneIncrement = 1f / (sceneEntries.Count > 0 ? sceneEntries.Count : 1);
+            float progress = 0f;
 
             foreach (var entry in sceneEntries)
             {
                 ProcessScene(entry.AssetPath, extractedText, metadata);
+                progress += sceneIncrement;
+                ITextExtractor.ReportProgress(this, progress);
             }
         }
         
@@ -352,6 +373,9 @@ namespace Translations
                 return;
             }
             
+            float sceneIncrement = 1f / metadata.manualScenePaths.Count;
+            float progress = 0f;
+
             foreach (var scenePath in metadata.manualScenePaths)
             {
                 if (string.IsNullOrEmpty(scenePath)) continue;
@@ -363,6 +387,8 @@ namespace Translations
                 {
                     Debug.LogWarning($"Scene at path '{scenePath}' does not exist.");
                 }
+                progress += sceneIncrement;
+                ITextExtractor.ReportProgress(this, progress);
             }
         }
 

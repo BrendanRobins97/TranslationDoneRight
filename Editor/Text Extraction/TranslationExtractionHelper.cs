@@ -70,134 +70,140 @@ namespace Translations
         {
             if (obj == null) return;
 
-            try
+            var type = obj.GetType();
+            
+            // Skip Unity types that should not be processed
+            if (ShouldSkipUnityType(type))
             {
-                var type = obj.GetType();
+                return;
+            }
 
-                // Skip Unity internal types to prevent potential issues
-                if (ShouldSkipUnityType(type))
+            // Get all properties
+            var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.NonPublic);
+            foreach (var property in properties)
+            {
+                try
                 {
-                    return;
-                }
-
-                // Skip if the type is marked with NotTranslated
-                if (type.IsDefined(typeof(NotTranslatedAttribute), true))
-                {
-                    return;
-                }
-
-                bool shouldTranslateAll = type.IsDefined(typeof(TranslatedAttribute), true);
-                var classAttribute = type.GetCustomAttributes(typeof(TranslatedAttribute), true).FirstOrDefault() as TranslatedAttribute;
-                bool isRecursive = classAttribute?.RecursiveTranslation ?? true;
-
-                // Only process fields if the class has [Translated] or we're looking at a field/property that has [Translated]
-                if (shouldTranslateAll)
-                {
-                    // Process all fields in the class since it's marked as translated
-                    FieldInfo[] fields = type.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
-                    foreach (FieldInfo field in fields)
+                    // Skip if property type is a Unity type we should skip
+                    if (ShouldSkipUnityType(property.PropertyType))
                     {
-                        // Skip fields marked with NotTranslated or Unity internal types
-                        if (!field.IsDefined(typeof(NotTranslatedAttribute), false))
-                        {
-                            bool isUnityType = ShouldSkipUnityType(field.FieldType);
-                            if (!isUnityType)
-                            {
-                                string fieldPath = string.IsNullOrEmpty(objectPath) ? field.Name : $"{objectPath}/{field.Name}";
-                                ExtractTranslatableField(field, obj, extractedText, metadata, sourcePath, fieldPath, sourceType);
-                            }
-                        }
+                        continue;
                     }
 
-                    // Process all properties in the class since it's marked as translated
-                    PropertyInfo[] properties = type.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
-                    foreach (PropertyInfo property in properties)
+                    // Check if property has the Translated attribute
+                    if (property.GetCustomAttributes(typeof(TranslatedAttribute), true).Length > 0)
                     {
-                        // Skip properties marked with NotTranslated or Unity internal types
-                        if (property.CanRead && !property.IsDefined(typeof(NotTranslatedAttribute), false))
+                        try
                         {
-                            bool isUnityType = ShouldSkipUnityType(property.PropertyType);
-                            if (!isUnityType)
+                            var value = property.GetValue(obj);
+                            if (value != null && !string.IsNullOrWhiteSpace(value.ToString()))
                             {
-                                string propertyPath = string.IsNullOrEmpty(objectPath) ? property.Name : $"{objectPath}/{property.Name}";
-                                ExtractTranslatableProperty(property, obj, extractedText, metadata, sourcePath, propertyPath, sourceType);
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    // If class isn't marked, only check fields/properties with [Translated]
-                    FieldInfo[] fields = type.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
-                    foreach (FieldInfo field in fields)
-                    {
-                        if (field.IsDefined(typeof(TranslatedAttribute), false) && 
-                            !field.IsDefined(typeof(NotTranslatedAttribute), false))
-                        {
-                            bool isUnityType = ShouldSkipUnityType(field.FieldType);
-                            if (!isUnityType)
-                            {
-                                ExtractTranslatableField(field, obj, extractedText, metadata, sourcePath, objectPath, sourceType);
-                            }
-                        }
-                        else if (isRecursive && !field.FieldType.IsPrimitive && !field.FieldType.IsEnum)
-                        {
-                            bool isUnityType = ShouldSkipUnityType(field.FieldType);
-                            if (!isUnityType)
-                            {
-                                // Only recurse into field values that are marked with [Translated] and not marked with [NotTranslated]
-                                object fieldValue = field.GetValue(obj);
-                                if (fieldValue != null && 
-                                    fieldValue.GetType().IsDefined(typeof(TranslatedAttribute), true) && 
-                                    !fieldValue.GetType().IsDefined(typeof(NotTranslatedAttribute), true))
+                                extractedText.Add(value.ToString());
+                                
+                                var sourceInfo = new TextSourceInfo
                                 {
-                                    ExtractFieldsRecursive(fieldValue, extractedText, metadata, sourcePath, objectPath, sourceType);
-                                }
+                                    sourceType = sourceType,
+                                    sourcePath = sourcePath,
+                                    objectPath = objectPath,
+                                    componentName = type.Name,
+                                    fieldName = property.Name,
+                                };
+                                metadata.AddSource(value.ToString(), sourceInfo);
                             }
                         }
+                        catch (System.Exception)
+                        {
+                            // Silently skip properties that can't be accessed
+                            continue;
+                        }
                     }
-
-                    PropertyInfo[] properties = type.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
-                    foreach (PropertyInfo property in properties)
+                    else
                     {
-                        if (property.IsDefined(typeof(TranslatedAttribute), false) && 
-                            !property.IsDefined(typeof(NotTranslatedAttribute), false) && 
-                            property.CanRead)
+                        // If not translated, check if it's a complex type we should recurse into
+                        try
                         {
-                            bool isUnityType = ShouldSkipUnityType(property.PropertyType);
-                            if (!isUnityType && !(obj is Component && property.DeclaringType.FullName.StartsWith("UnityEngine")))
+                            var value = property.GetValue(obj);
+                            if (value != null && !property.PropertyType.IsPrimitive)
                             {
-                                ExtractTranslatableProperty(property, obj, extractedText, metadata, sourcePath, objectPath, sourceType);
+                                ExtractFieldsRecursive(value, extractedText, metadata, sourcePath, objectPath, sourceType);
                             }
                         }
-                        else if (isRecursive && property.CanRead && !property.PropertyType.IsPrimitive && !property.PropertyType.IsEnum)
+                        catch (System.Exception)
                         {
-                            bool isUnityType = ShouldSkipUnityType(property.PropertyType);
-                            if (!isUnityType && !(obj is Component && property.DeclaringType.FullName.StartsWith("UnityEngine")))
-                            {
-                                try
-                                {
-                                    // Only recurse into property values that are marked with [Translated] and not marked with [NotTranslated]
-                                    object propertyValue = property.GetValue(obj);
-                                    if (propertyValue != null && 
-                                        propertyValue.GetType().IsDefined(typeof(TranslatedAttribute), true) &&
-                                        !propertyValue.GetType().IsDefined(typeof(NotTranslatedAttribute), true))
-                                    {
-                                        ExtractFieldsRecursive(propertyValue, extractedText, metadata, sourcePath, objectPath, sourceType);
-                                    }
-                                }
-                                catch (System.Exception ex)
-                                {
-                                    Debug.LogError($"Error accessing property {property.Name}: {ex.Message}\n{ex.StackTrace}");
-                                }
-                            }
+                            // Silently skip properties that can't be accessed
+                            continue;
                         }
                     }
+                }
+                catch (System.Exception)
+                {
+                    // Silently skip problematic properties
+                    continue;
                 }
             }
-            finally
+
+            // Get all fields
+            var fields = type.GetFields(BindingFlags.Public | BindingFlags.Instance | BindingFlags.NonPublic);
+            foreach (var field in fields)
             {
-                visitedObjects.Remove(obj);
+                try
+                {
+                    // Skip if field type is a Unity type we should skip
+                    if (ShouldSkipUnityType(field.FieldType))
+                    {
+                        continue;
+                    }
+
+                    // Check if field has the Translated attribute
+                    if (field.GetCustomAttributes(typeof(TranslatedAttribute), true).Length > 0)
+                    {
+                        try
+                        {
+                            var value = field.GetValue(obj);
+                            if (value != null && !string.IsNullOrWhiteSpace(value.ToString()))
+                            {
+                                extractedText.Add(value.ToString());
+                                
+                                var sourceInfo = new TextSourceInfo
+                                {
+                                    sourceType = sourceType,
+                                    sourcePath = sourcePath,
+                                    objectPath = objectPath,
+                                    componentName = type.Name,
+                                    fieldName = field.Name,
+                                };
+                                metadata.AddSource(value.ToString(), sourceInfo);
+                            }
+                        }
+                        catch (System.Exception)
+                        {
+                            // Silently skip fields that can't be accessed
+                            continue;
+                        }
+                    }
+                    else
+                    {
+                        // If not translated, check if it's a complex type we should recurse into
+                        try
+                        {
+                            var value = field.GetValue(obj);
+                            if (value != null && !field.FieldType.IsPrimitive)
+                            {
+                                ExtractFieldsRecursive(value, extractedText, metadata, sourcePath, objectPath, sourceType);
+                            }
+                        }
+                        catch (System.Exception)
+                        {
+                            // Silently skip fields that can't be accessed
+                            continue;
+                        }
+                    }
+                }
+                catch (System.Exception)
+                {
+                    // Silently skip problematic fields
+                    continue;
+                }
             }
         }
 

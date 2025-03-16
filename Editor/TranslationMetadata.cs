@@ -22,7 +22,6 @@ namespace Translations
         public string objectPath;        // Full path to the object in hierarchy (for scenes/prefabs)
         public string componentName;     // Name of the component containing the text
         public string fieldName;         // Name of the field containing the text
-        public bool wasInactive;         // Whether the GameObject was inactive when extracted
     }
 
     [Serializable]

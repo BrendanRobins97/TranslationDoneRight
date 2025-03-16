@@ -1401,12 +1401,6 @@ namespace Translations
                                 EditorGUILayout.LabelField("Path", source.objectPath);
                             }
 
-                            // Was the game object inactive when extracted?
-                            if (source.wasInactive)
-                            {
-                                EditorGUILayout.LabelField("State", "Inactive when extracted", EditorStyles.boldLabel);
-                            }
-
                             EditorGUI.indentLevel--;
                             EditorGUILayout.Space(5);
                         }

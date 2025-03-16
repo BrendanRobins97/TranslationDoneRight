@@ -4,6 +4,8 @@ using UnityEditor;
 using System.Collections.Generic;
 using System.Reflection;
 using System.IO;
+using TMPro;
+using UnityEngine.UI;
 
 namespace Translations
 {
@@ -62,6 +64,55 @@ namespace Translations
                 
                 if (prefab != null)
                 {
+                    // Extract TextMeshPro texts
+                    var tmpTexts = prefab.GetComponentsInChildren<TextMeshProUGUI>(true);
+                    foreach (TextMeshProUGUI textObject in tmpTexts)
+                    {
+                        if (textObject.GetComponent<DynamicTMP>())
+                        {
+                            continue;
+                        }
+                        if (!string.IsNullOrWhiteSpace(textObject.text))
+                        {
+                            extractedText.Add(textObject.text);
+                            
+                            var sourceInfo = new TextSourceInfo
+                            {
+                                sourceType = TextSourceType.Prefab,
+                                sourcePath = path,
+                                objectPath = GetGameObjectPath(textObject.gameObject),
+                                componentName = textObject.GetType().Name,
+                                fieldName = "text",
+                            };
+                            metadata.AddSource(textObject.text, sourceInfo);
+                        }
+                    }
+
+                    // Extract UI Text texts
+                    var uiTexts = prefab.GetComponentsInChildren<Text>(true);
+                    foreach (Text uiText in uiTexts)
+                    {
+                        if (uiText.GetComponent<DynamicTMP>())
+                        {
+                            continue;
+                        }
+                        if (!string.IsNullOrWhiteSpace(uiText.text))
+                        {
+                            extractedText.Add(uiText.text);
+                            
+                            var sourceInfo = new TextSourceInfo
+                            {
+                                sourceType = TextSourceType.Prefab,
+                                sourcePath = path,
+                                objectPath = GetGameObjectPath(uiText.gameObject),
+                                componentName = uiText.GetType().Name,
+                                fieldName = "text",
+                            };
+                            metadata.AddSource(uiText.text, sourceInfo);
+                        }
+                    }
+
+                    // Extract fields marked with [Translated] attribute from all components
                     Component[] allComponents = prefab.GetComponentsInChildren<Component>(true);
                     foreach (Component component in allComponents)
                     {
@@ -70,52 +121,15 @@ namespace Translations
                             Debug.LogWarning("Null component found in prefab: " + path);
                             continue;
                         }
-                        
-                        ExtractFieldsRecursive(
-                            component, 
-                            extractedText, 
+
+                        TranslationExtractionHelper.ExtractTranslationsFromObject(
+                            component,
+                            extractedText,
                             metadata,
-                            path, 
-                            GetGameObjectPath(component.gameObject), 
-                            !component.gameObject.activeInHierarchy
+                            path,
+                            GetGameObjectPath(component.gameObject),
+                            TextSourceType.Prefab
                         );
-                    }
-                }
-            }
-        }
-
-        private void ExtractFieldsRecursive(object obj, HashSet<string> extractedText, TranslationMetadata metadata, string sourcePath, string objectPath, bool wasInactive)
-        {
-            if (obj == null) return;
-
-            FieldInfo[] fields = obj.GetType().GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-            foreach (FieldInfo field in fields)
-            {
-                if (field.IsDefined(typeof(TranslatedAttribute), false))
-                {
-                    if (field.FieldType == typeof(string))
-                    {
-                        string fieldValue = field.GetValue(obj) as string;
-                        if (!string.IsNullOrEmpty(fieldValue))
-                        {
-                            extractedText.Add(fieldValue);
-                            
-                            var sourceInfo = new TextSourceInfo
-                            {
-                                sourceType = TextSourceType.Prefab,
-                                sourcePath = sourcePath,
-                                objectPath = objectPath,
-                                componentName = obj.GetType().Name,
-                                fieldName = field.Name,
-                                wasInactive = wasInactive
-                            };
-                            metadata.AddSource(fieldValue, sourceInfo);
-                        }
-                    }
-                    else if (!field.FieldType.IsPrimitive && !field.FieldType.IsEnum && field.FieldType.IsClass)
-                    {
-                        object nestedObj = field.GetValue(obj);
-                        ExtractFieldsRecursive(nestedObj, extractedText, metadata, sourcePath, objectPath, wasInactive);
                     }
                 }
             }

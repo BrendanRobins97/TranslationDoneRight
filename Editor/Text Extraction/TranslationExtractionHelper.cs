@@ -32,7 +32,6 @@ namespace Translations
             TranslationMetadata metadata, 
             string sourcePath,
             string objectPath = "",
-            bool wasInactive = false,
             TextSourceType sourceType = TextSourceType.Scene)
         {
             if (obj == null) return;
@@ -41,7 +40,7 @@ namespace Translations
             // This helps ensure collections in later objects are properly processed
             ResetVisitedObjects();
             
-            ExtractFieldsRecursive(obj, extractedText, metadata, sourcePath, objectPath, wasInactive, sourceType);
+            ExtractFieldsRecursive(obj, extractedText, metadata, sourcePath, objectPath, sourceType);
         }
 
         // Helper to check if a type is a Unity internal type we should skip
@@ -67,7 +66,6 @@ namespace Translations
             TranslationMetadata metadata, 
             string sourcePath, 
             string objectPath, 
-            bool wasInactive,
             TextSourceType sourceType)
         {
             if (obj == null) return;
@@ -106,7 +104,7 @@ namespace Translations
                             if (!isUnityType)
                             {
                                 string fieldPath = string.IsNullOrEmpty(objectPath) ? field.Name : $"{objectPath}/{field.Name}";
-                                ExtractTranslatableField(field, obj, extractedText, metadata, sourcePath, fieldPath, wasInactive, sourceType);
+                                ExtractTranslatableField(field, obj, extractedText, metadata, sourcePath, fieldPath, sourceType);
                             }
                         }
                     }
@@ -122,7 +120,7 @@ namespace Translations
                             if (!isUnityType)
                             {
                                 string propertyPath = string.IsNullOrEmpty(objectPath) ? property.Name : $"{objectPath}/{property.Name}";
-                                ExtractTranslatableProperty(property, obj, extractedText, metadata, sourcePath, propertyPath, wasInactive, sourceType);
+                                ExtractTranslatableProperty(property, obj, extractedText, metadata, sourcePath, propertyPath, sourceType);
                             }
                         }
                     }
@@ -139,7 +137,7 @@ namespace Translations
                             bool isUnityType = ShouldSkipUnityType(field.FieldType);
                             if (!isUnityType)
                             {
-                                ExtractTranslatableField(field, obj, extractedText, metadata, sourcePath, objectPath, wasInactive, sourceType);
+                                ExtractTranslatableField(field, obj, extractedText, metadata, sourcePath, objectPath, sourceType);
                             }
                         }
                         else if (isRecursive && !field.FieldType.IsPrimitive && !field.FieldType.IsEnum)
@@ -153,7 +151,7 @@ namespace Translations
                                     fieldValue.GetType().IsDefined(typeof(TranslatedAttribute), true) && 
                                     !fieldValue.GetType().IsDefined(typeof(NotTranslatedAttribute), true))
                                 {
-                                    ExtractFieldsRecursive(fieldValue, extractedText, metadata, sourcePath, objectPath, wasInactive, sourceType);
+                                    ExtractFieldsRecursive(fieldValue, extractedText, metadata, sourcePath, objectPath, sourceType);
                                 }
                             }
                         }
@@ -169,7 +167,7 @@ namespace Translations
                             bool isUnityType = ShouldSkipUnityType(property.PropertyType);
                             if (!isUnityType && !(obj is Component && property.DeclaringType.FullName.StartsWith("UnityEngine")))
                             {
-                                ExtractTranslatableProperty(property, obj, extractedText, metadata, sourcePath, objectPath, wasInactive, sourceType);
+                                ExtractTranslatableProperty(property, obj, extractedText, metadata, sourcePath, objectPath, sourceType);
                             }
                         }
                         else if (isRecursive && property.CanRead && !property.PropertyType.IsPrimitive && !property.PropertyType.IsEnum)
@@ -185,7 +183,7 @@ namespace Translations
                                         propertyValue.GetType().IsDefined(typeof(TranslatedAttribute), true) &&
                                         !propertyValue.GetType().IsDefined(typeof(NotTranslatedAttribute), true))
                                     {
-                                        ExtractFieldsRecursive(propertyValue, extractedText, metadata, sourcePath, objectPath, wasInactive, sourceType);
+                                        ExtractFieldsRecursive(propertyValue, extractedText, metadata, sourcePath, objectPath, sourceType);
                                     }
                                 }
                                 catch (System.Exception ex)
@@ -210,7 +208,6 @@ namespace Translations
             TranslationMetadata metadata, 
             string sourcePath, 
             string objectPath, 
-            bool wasInactive,
             TextSourceType sourceType)
         {
             try
@@ -235,13 +232,13 @@ namespace Translations
 
                 if (field.FieldType == typeof(string))
                 {
-                    AddTranslationIfValid(fieldValue as string, obj ?? field.DeclaringType, field.Name, extractedText, metadata, sourcePath, objectPath, wasInactive, sourceType);
+                    AddTranslationIfValid(fieldValue as string, obj ?? field.DeclaringType, field.Name, extractedText, metadata, sourcePath, objectPath, sourceType);
                 }
                 else if (typeof(IEnumerable<string>).IsAssignableFrom(field.FieldType))
                 {
                     foreach (string str in (IEnumerable<string>)fieldValue)
                     {
-                        AddTranslationIfValid(str, obj ?? field.DeclaringType, field.Name, extractedText, metadata, sourcePath, objectPath, wasInactive, sourceType);
+                        AddTranslationIfValid(str, obj ?? field.DeclaringType, field.Name, extractedText, metadata, sourcePath, objectPath, sourceType);
                     }
                 }
                 // Add dictionary handling
@@ -259,7 +256,7 @@ namespace Translations
                             {
                                 foreach (DictionaryEntry entry in dictionary)
                                 {
-                                    AddTranslationIfValid(entry.Value as string, obj ?? field.DeclaringType, field.Name, extractedText, metadata, sourcePath, objectPath, wasInactive, sourceType);
+                                    AddTranslationIfValid(entry.Value as string, obj ?? field.DeclaringType, field.Name, extractedText, metadata, sourcePath, objectPath, sourceType);
                                 }
                             }
                         }
@@ -325,7 +322,7 @@ namespace Translations
                                     // Clear visited objects to make sure we can process this item properly
                                     visitedObjects.Clear();
                                     // Process all fields of the collection item since it's marked as translated
-                                    ExtractFieldsRecursive(item, extractedText, metadata, sourcePath, itemPath, wasInactive, sourceType);
+                                    ExtractFieldsRecursive(item, extractedText, metadata, sourcePath, itemPath, sourceType);
                                 }
                                 else
                                 {
@@ -334,7 +331,7 @@ namespace Translations
                                     if (itemType.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
                                             .Any(f => f.IsDefined(typeof(TranslatedAttribute), false)))
                                     {
-                                        ExtractFieldsRecursive(item, extractedText, metadata, sourcePath, itemPath, wasInactive, sourceType);
+                                        ExtractFieldsRecursive(item, extractedText, metadata, sourcePath, itemPath, sourceType);
                                     }
                                 }
                             }
@@ -348,7 +345,7 @@ namespace Translations
                 }
                 else if (!field.FieldType.IsPrimitive && !field.FieldType.IsEnum)
                 {
-                    ExtractFieldsRecursive(fieldValue, extractedText, metadata, sourcePath, objectPath, wasInactive, sourceType);
+                    ExtractFieldsRecursive(fieldValue, extractedText, metadata, sourcePath, objectPath, sourceType);
                 }
             }
             catch (System.Exception ex)
@@ -364,7 +361,6 @@ namespace Translations
             TranslationMetadata metadata, 
             string sourcePath, 
             string objectPath, 
-            bool wasInactive,
             TextSourceType sourceType)
         {
             if (!property.CanRead) return;
@@ -399,13 +395,13 @@ namespace Translations
 
                 if (property.PropertyType == typeof(string))
                 {
-                    AddTranslationIfValid(propertyValue as string, obj, property.Name, extractedText, metadata, sourcePath, objectPath, wasInactive, sourceType);
+                    AddTranslationIfValid(propertyValue as string, obj, property.Name, extractedText, metadata, sourcePath, objectPath, sourceType);
                 }
                 else if (typeof(IEnumerable<string>).IsAssignableFrom(property.PropertyType))
                 {
                     foreach (string str in (IEnumerable<string>)propertyValue)
                     {
-                        AddTranslationIfValid(str, obj, property.Name, extractedText, metadata, sourcePath, objectPath, wasInactive, sourceType);
+                        AddTranslationIfValid(str, obj, property.Name, extractedText, metadata, sourcePath, objectPath, sourceType);
                     }
                 }
                 // Add dictionary handling for properties
@@ -419,7 +415,7 @@ namespace Translations
                         var dictionary = propertyValue as IDictionary;
                         foreach (DictionaryEntry entry in dictionary)
                         {
-                            AddTranslationIfValid(entry.Value as string, obj, property.Name, extractedText, metadata, sourcePath, objectPath, wasInactive, sourceType);
+                            AddTranslationIfValid(entry.Value as string, obj, property.Name, extractedText, metadata, sourcePath, objectPath, sourceType);
                         }
                     }
                 }
@@ -457,7 +453,7 @@ namespace Translations
                                     // Clear visited objects to make sure we can process this item properly
                                     visitedObjects.Clear();
                                     // Process all fields of the collection item since it's marked as translated
-                                    ExtractFieldsRecursive(item, extractedText, metadata, sourcePath, itemPath, wasInactive, sourceType);
+                                    ExtractFieldsRecursive(item, extractedText, metadata, sourcePath, itemPath, sourceType);
                                 }
                                 else
                                 {
@@ -466,7 +462,7 @@ namespace Translations
                                     if (itemType.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
                                             .Any(f => f.IsDefined(typeof(TranslatedAttribute), false)))
                                     {
-                                        ExtractFieldsRecursive(item, extractedText, metadata, sourcePath, itemPath, wasInactive, sourceType);
+                                        ExtractFieldsRecursive(item, extractedText, metadata, sourcePath, itemPath, sourceType);
                                     }
                                 }
                             }
@@ -480,7 +476,7 @@ namespace Translations
                 }
                 else if (!property.PropertyType.IsPrimitive && !property.PropertyType.IsEnum)
                 {
-                    ExtractFieldsRecursive(propertyValue, extractedText, metadata, sourcePath, objectPath, wasInactive, sourceType);
+                    ExtractFieldsRecursive(propertyValue, extractedText, metadata, sourcePath, objectPath, sourceType);
                 }
             }
             catch (System.Exception ex)
@@ -497,7 +493,6 @@ namespace Translations
             TranslationMetadata metadata, 
             string sourcePath, 
             string objectPath, 
-            bool wasInactive,
             TextSourceType sourceType)
         {
             if (string.IsNullOrWhiteSpace(text)) return;
@@ -511,7 +506,6 @@ namespace Translations
                 objectPath = objectPath,
                 componentName = obj.GetType().Name,
                 fieldName = memberName,
-                wasInactive = wasInactive
             };
             metadata.AddSource(text, sourceInfo);
         }

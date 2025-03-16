@@ -2,9 +2,6 @@
 
 A powerful, flexible translation and localization system for Unity games and applications.
 
-![Unity Version](https://img.shields.io/badge/Unity-2021.3%2B-blue)
-![License](https://img.shields.io/badge/License-MIT-green)
-
 ## Overview
 
 This Unity language translation package provides a comprehensive solution for managing translations in your Unity projects. It features automatic text extraction, an intuitive editor interface, runtime language switching, and seamless UI integration.

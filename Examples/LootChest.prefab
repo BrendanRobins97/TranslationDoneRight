@@ -1,0 +1,79 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &3223420481565242450
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 9051424446688827876}
+  - component: {fileID: 2002356268531988532}
+  m_Layer: 0
+  m_Name: LootChest
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &9051424446688827876
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3223420481565242450}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2002356268531988532
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3223420481565242450}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8b0648f65e593484f9b5caec35cb5e03, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  chestName: Ancient Dragon Hoard
+  chestDescription: A weathered chest adorned with dragon scales. Legends say it
+    contains treasures beyond imagination... or just some rusty equipment.
+  chestInteractionPrompt: Press E to open
+  nameText: {fileID: 0}
+  descriptionText: {fileID: 0}
+  interactionPromptText: {fileID: 0}
+  openEffect: {fileID: 0}
+  possibleLoot:
+  - itemName: Dragon Fang Dagger
+    description: A dagger carved from a dragon's tooth. Still warm to the touch.
+    flavorText: The previous owner had terrible dental hygiene.
+    goldValue: 10
+    icon: {fileID: 0}
+  - itemName: Enchanted Coin Purse
+    description: A magical coin purse that occasionally produces extra coins.
+    flavorText: 'Warning: Not responsible for inflation.'
+    goldValue: 10
+    icon: {fileID: 0}
+  - itemName: Scroll of Mysterious Wisdom
+    description: Ancient parchment containing powerful knowledge. May also contain
+      grocery list.
+    flavorText: Sometimes the greatest treasures are the most mundane.
+    goldValue: 10
+    icon: {fileID: 0}
+  chestOpenMessages:
+  - The chest creaks open with an ancient groan!
+  - A cloud of dust billows out as you open the chest!
+  - The lock gives way with a satisfying click!
+  - The chest pops open immediately - that's suspicious...
+  lockedMessage: This chest is locked tight. Find the key or try breaking it open.
+  emptyMessage: The chest is empty. Someone got here before you.
+  trapMessage: It's a trap! The chest explodes in a cloud of poison gas!

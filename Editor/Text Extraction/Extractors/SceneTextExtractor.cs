@@ -185,7 +185,6 @@ namespace Translations
                         objectPath = GetGameObjectPath(textObject.gameObject),
                         componentName = textObject.GetType().Name,
                         fieldName = "text",
-                        wasInactive = !textObject.gameObject.activeInHierarchy
                     };
                     metadata.AddSource(textObject.text, sourceInfo);
                 }
@@ -212,7 +211,6 @@ namespace Translations
                         objectPath = GetGameObjectPath(uiText.gameObject),
                         componentName = uiText.GetType().Name,
                         fieldName = "text",
-                        wasInactive = !uiText.gameObject.activeInHierarchy
                     };
                     metadata.AddSource(uiText.text, sourceInfo);
                 }
@@ -231,7 +229,6 @@ namespace Translations
                     metadata, 
                     scenePath, 
                     GetGameObjectPath(obj), 
-                    !obj.activeInHierarchy,
                     TextSourceType.Scene);
             }
 

@@ -57,135 +57,169 @@ namespace Translations
         
         private void ProcessPrefabs(string[] prefabGuids, HashSet<string> extractedText, TranslationMetadata metadata)
         {
+            Debug.Log($"[PrefabTextExtractor] Starting to process {prefabGuids.Length} prefabs");
+            
             foreach (string guid in prefabGuids)
             {
                 try
                 {
                     string path = AssetDatabase.GUIDToAssetPath(guid);
-                    GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                    Debug.Log($"[PrefabTextExtractor] Processing prefab at path: {path}");
                     
-                    if (prefab != null)
+                    GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                    if (prefab == null)
                     {
-                        // Extract TextMeshPro texts
-                        try
-                        {
-                            var tmpTexts = prefab.GetComponentsInChildren<TextMeshProUGUI>(true);
-                            foreach (TextMeshProUGUI textObject in tmpTexts)
-                            {
-                                if (textObject == null) continue;
-                                
-                                try
-                                {
-                                    if (textObject.GetComponent<DynamicTMP>())
-                                    {
-                                        continue;
-                                    }
-                                    if (!string.IsNullOrWhiteSpace(textObject.text))
-                                    {
-                                        extractedText.Add(textObject.text);
-                                        
-                                        var sourceInfo = new TextSourceInfo
-                                        {
-                                            sourceType = TextSourceType.Prefab,
-                                            sourcePath = path,
-                                            objectPath = GetGameObjectPath(textObject.gameObject),
-                                            componentName = textObject.GetType().Name,
-                                            fieldName = "text",
-                                        };
-                                        metadata.AddSource(textObject.text, sourceInfo);
-                                    }
-                                }
-                                catch (System.Exception e)
-                                {
-                                    Debug.LogWarning($"Failed to process TMP text in prefab {path}: {e.Message}");
-                                }
-                            }
-                        }
-                        catch (System.Exception e)
-                        {
-                            Debug.LogWarning($"Failed to process TMP components in prefab {path}: {e.Message}");
-                        }
+                        Debug.LogWarning($"[PrefabTextExtractor] Failed to load prefab at path: {path}");
+                        continue;
+                    }
+                    
+                    Debug.Log($"[PrefabTextExtractor] Successfully loaded prefab: {prefab.name}");
 
-                        // Extract UI Text texts
-                        try
+                    // Extract TextMeshPro texts
+                    try
+                    {
+                        Debug.Log($"[PrefabTextExtractor] Starting TMP extraction in prefab: {prefab.name}");
+                        var tmpTexts = prefab.GetComponentsInChildren<TextMeshProUGUI>(true);
+                        Debug.Log($"[PrefabTextExtractor] Found {tmpTexts.Length} TMP objects in {prefab.name}");
+                        
+                        foreach (TextMeshProUGUI textObject in tmpTexts)
                         {
-                            var uiTexts = prefab.GetComponentsInChildren<Text>(true);
-                            foreach (Text uiText in uiTexts)
+                            if (textObject == null)
                             {
-                                if (uiText == null) continue;
-                                
-                                try
-                                {
-                                    if (uiText.GetComponent<DynamicTMP>())
-                                    {
-                                        continue;
-                                    }
-                                    if (!string.IsNullOrWhiteSpace(uiText.text))
-                                    {
-                                        extractedText.Add(uiText.text);
-                                        
-                                        var sourceInfo = new TextSourceInfo
-                                        {
-                                            sourceType = TextSourceType.Prefab,
-                                            sourcePath = path,
-                                            objectPath = GetGameObjectPath(uiText.gameObject),
-                                            componentName = uiText.GetType().Name,
-                                            fieldName = "text",
-                                        };
-                                        metadata.AddSource(uiText.text, sourceInfo);
-                                    }
-                                }
-                                catch (System.Exception e)
-                                {
-                                    Debug.LogWarning($"Failed to process UI text in prefab {path}: {e.Message}");
-                                }
+                                Debug.LogWarning($"[PrefabTextExtractor] Null TMP object found in prefab: {path}");
+                                continue;
                             }
-                        }
-                        catch (System.Exception e)
-                        {
-                            Debug.LogWarning($"Failed to process UI Text components in prefab {path}: {e.Message}");
-                        }
-
-                        // Extract fields marked with [Translated] attribute from all components
-                        try
-                        {
-                            Component[] allComponents = prefab.GetComponentsInChildren<Component>(true);
-                            foreach (Component component in allComponents)
+                            
+                            try
                             {
-                                if (component == null)
+                                Debug.Log($"[PrefabTextExtractor] Processing TMP object: {GetGameObjectPath(textObject.gameObject)}");
+                                if (textObject.GetComponent<DynamicTMP>())
                                 {
-                                    Debug.LogWarning("Null component found in prefab: " + path);
+                                    Debug.Log($"[PrefabTextExtractor] Skipping DynamicTMP object: {GetGameObjectPath(textObject.gameObject)}");
                                     continue;
                                 }
-
-                                try
+                                if (!string.IsNullOrWhiteSpace(textObject.text))
                                 {
-                                    TranslationExtractionHelper.ExtractTranslationsFromObject(
-                                        component,
-                                        extractedText,
-                                        metadata,
-                                        path,
-                                        GetGameObjectPath(component.gameObject),
-                                        TextSourceType.Prefab
-                                    );
-                                }
-                                catch (System.Exception e)
-                                {
-                                    Debug.LogWarning($"Failed to extract translations from component {component.GetType().Name} in prefab {path}: {e.Message}");
+                                    Debug.Log($"[PrefabTextExtractor] Found text in TMP: '{textObject.text}' at {GetGameObjectPath(textObject.gameObject)}");
+                                    extractedText.Add(textObject.text);
+                                    
+                                    var sourceInfo = new TextSourceInfo
+                                    {
+                                        sourceType = TextSourceType.Prefab,
+                                        sourcePath = path,
+                                        objectPath = GetGameObjectPath(textObject.gameObject),
+                                        componentName = textObject.GetType().Name,
+                                        fieldName = "text",
+                                    };
+                                    metadata.AddSource(textObject.text, sourceInfo);
                                 }
                             }
+                            catch (System.Exception e)
+                            {
+                                Debug.LogWarning($"[PrefabTextExtractor] Failed to process TMP text in prefab {path} at {GetGameObjectPath(textObject.gameObject)}: {e.Message}\nStack trace: {e.StackTrace}");
+                            }
                         }
-                        catch (System.Exception e)
+                    }
+                    catch (System.Exception e)
+                    {
+                        Debug.LogWarning($"[PrefabTextExtractor] Failed to process TMP components in prefab {path}: {e.Message}\nStack trace: {e.StackTrace}");
+                    }
+
+                    // Extract UI Text texts
+                    try
+                    {
+                        Debug.Log($"[PrefabTextExtractor] Starting UI Text extraction in prefab: {prefab.name}");
+                        var uiTexts = prefab.GetComponentsInChildren<Text>(true);
+                        Debug.Log($"[PrefabTextExtractor] Found {uiTexts.Length} UI Text objects in {prefab.name}");
+                        
+                        foreach (Text uiText in uiTexts)
                         {
-                            Debug.LogWarning($"Failed to process components in prefab {path}: {e.Message}");
+                            if (uiText == null)
+                            {
+                                Debug.LogWarning($"[PrefabTextExtractor] Null UI Text object found in prefab: {path}");
+                                continue;
+                            }
+                            
+                            try
+                            {
+                                Debug.Log($"[PrefabTextExtractor] Processing UI Text object: {GetGameObjectPath(uiText.gameObject)}");
+                                if (uiText.GetComponent<DynamicTMP>())
+                                {
+                                    Debug.Log($"[PrefabTextExtractor] Skipping DynamicTMP UI Text object: {GetGameObjectPath(uiText.gameObject)}");
+                                    continue;
+                                }
+                                if (!string.IsNullOrWhiteSpace(uiText.text))
+                                {
+                                    Debug.Log($"[PrefabTextExtractor] Found text in UI Text: '{uiText.text}' at {GetGameObjectPath(uiText.gameObject)}");
+                                    extractedText.Add(uiText.text);
+                                    
+                                    var sourceInfo = new TextSourceInfo
+                                    {
+                                        sourceType = TextSourceType.Prefab,
+                                        sourcePath = path,
+                                        objectPath = GetGameObjectPath(uiText.gameObject),
+                                        componentName = uiText.GetType().Name,
+                                        fieldName = "text",
+                                    };
+                                    metadata.AddSource(uiText.text, sourceInfo);
+                                }
+                            }
+                            catch (System.Exception e)
+                            {
+                                Debug.LogWarning($"[PrefabTextExtractor] Failed to process UI text in prefab {path} at {GetGameObjectPath(uiText.gameObject)}: {e.Message}\nStack trace: {e.StackTrace}");
+                            }
                         }
+                    }
+                    catch (System.Exception e)
+                    {
+                        Debug.LogWarning($"[PrefabTextExtractor] Failed to process UI Text components in prefab {path}: {e.Message}\nStack trace: {e.StackTrace}");
+                    }
+
+                    // Extract fields marked with [Translated] attribute from all components
+                    try
+                    {
+                        Debug.Log($"[PrefabTextExtractor] Starting component extraction in prefab: {prefab.name}");
+                        Component[] allComponents = prefab.GetComponentsInChildren<Component>(true);
+                        Debug.Log($"[PrefabTextExtractor] Found {allComponents.Length} components in {prefab.name}");
+                        
+                        foreach (Component component in allComponents)
+                        {
+                            if (component == null)
+                            {
+                                Debug.LogWarning($"[PrefabTextExtractor] Null component found in prefab: {path}");
+                                continue;
+                            }
+
+                            try
+                            {
+                                Debug.Log($"[PrefabTextExtractor] Processing component {component.GetType().Name} on {GetGameObjectPath(component.gameObject)}");
+                                TranslationExtractionHelper.ExtractTranslationsFromObject(
+                                    component,
+                                    extractedText,
+                                    metadata,
+                                    path,
+                                    GetGameObjectPath(component.gameObject),
+                                    TextSourceType.Prefab
+                                );
+                            }
+                            catch (System.Exception e)
+                            {
+                                Debug.LogWarning($"[PrefabTextExtractor] Failed to extract translations from component {component.GetType().Name} in prefab {path} at {GetGameObjectPath(component.gameObject)}: {e.Message}\nStack trace: {e.StackTrace}");
+                            }
+                        }
+                    }
+                    catch (System.Exception e)
+                    {
+                        Debug.LogWarning($"[PrefabTextExtractor] Failed to process components in prefab {path}: {e.Message}\nStack trace: {e.StackTrace}");
                     }
                 }
                 catch (System.Exception e)
                 {
-                    Debug.LogError($"Failed to process prefab with GUID {guid}: {e.Message}");
+                    Debug.LogError($"[PrefabTextExtractor] Failed to process prefab with GUID {guid}: {e.Message}\nStack trace: {e.StackTrace}");
                 }
             }
+            
+            Debug.Log($"[PrefabTextExtractor] Finished processing all prefabs");
         }
 
         private string GetGameObjectPath(GameObject obj)

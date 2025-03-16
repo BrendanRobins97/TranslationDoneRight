@@ -1,21 +1,22 @@
 {
-  "name": "com.flamboozle.translations-done-right",
-  "version": "1.0.2",
+  "name": "com.brendanrobins.translationsdoneright",
+  "version": "1.0.3",
   "displayName": "Translations Done Right",
-  "description": "A powerful localization and translations management system for Unity with intelligent text similarity detection, automated extraction, and comprehensive editor tools.",
+  "description": "A comprehensive translation management system for Unity",
   "unity": "2020.3",
-  "dependencies": {
-    "com.unity.textmeshpro": "3.0.6",
-    "com.unity.addressables": "1.21.10"
-  },
+  "unityRelease": "0f1",
+  "documentationUrl": "https://github.com/BrendanRobins97/TranslationDoneRight",
+  "changelogUrl": "https://github.com/BrendanRobins97/TranslationDoneRight/blob/main/CHANGELOG.md",
+  "licensesUrl": "https://github.com/BrendanRobins97/TranslationDoneRight/blob/main/LICENSE",
   "keywords": [
     "localization",
-    "translations",
+    "translation",
     "i18n",
-    "text",
-    "language"
+    "l10n"
   ],
   "author": {
-    "name": "Flamboozle"
+    "name": "Brendan Robins",
+    "email": "brendan.robins97@gmail.com",
+    "url": "https://github.com/BrendanRobins97"
   }
 } 

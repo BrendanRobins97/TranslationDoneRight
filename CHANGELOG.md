@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- Support for custom extraction patterns
+- New command-line interface for batch processing
+
+### Fixed
+- Edge case in prefab processing with nested objects
+
+## [1.0.3] - 2024-03-16
+### Added
 - Version update notifications
 - Automatic update checking on Unity startup
 - Direct package updating through Git
@@ -15,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Memory leak in prefab processing
 - Error handling in Git operations
 
-## [1.0.0] - 2024-03-16
+## [1.0.0] - 2024-03-14
 ### Added
 - Initial release
 - Scene text extraction
@@ -24,5 +32,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - TextMeshPro support
 - Basic documentation
 
-[Unreleased]: https://github.com/BrendanRobins97/TranslationDoneRight/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/BrendanRobins97/TranslationDoneRight/compare/v1.0.3...HEAD
+[1.0.3]: https://github.com/BrendanRobins97/TranslationDoneRight/compare/v1.0.0...v1.0.3
 [1.0.0]: https://github.com/BrendanRobins97/TranslationDoneRight/releases/tag/v1.0.0 

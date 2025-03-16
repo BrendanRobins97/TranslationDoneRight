@@ -22,6 +22,7 @@ namespace Translations
         public string minUnityVersion;
         public string downloadUrl = "https://github.com/BrendanRobins97/TranslationDoneRight";
         public string commitHash;
+        public bool HasUpdate;
     }
 
     public class VersionManager
@@ -366,12 +367,8 @@ namespace Translations
             {
                 // Check if we have any updates using packages-lock.json and GitHub API
                 Debug.Log("[Version Check] Checking for remote changes...");
-                if (!await HasRemoteChanges(packagePath))
-                {
-                    Debug.Log("[Version Check] No remote changes found.");
-                    return null; // No updates available
-                }
-                Debug.Log("[Version Check] Remote changes detected!");
+                bool hasUpdates = await HasRemoteChanges(packagePath);
+                Debug.Log(hasUpdates ? "[Version Check] Remote changes detected!" : "[Version Check] No remote changes found.");
 
                 // Get remote version from package.json
                 Debug.Log("[Version Check] Getting remote package version...");
@@ -401,17 +398,17 @@ namespace Translations
                 var entries = ChangelogParser.ParseChangelog(tempChangelogPath);
                 Debug.Log($"[Version Check] Found {entries.Count} changelog entries.");
                 
-                // Find the entry that matches the remote version
-                var matchingEntry = entries.FirstOrDefault(e => e.Version == remoteVersion) ?? 
-                                  entries.FirstOrDefault(e => e.Version == "Unreleased");
+                // Always get the latest entry (either Unreleased or the most recent version)
+                var latestEntry = entries.FirstOrDefault(e => e.Version == "Unreleased") ?? 
+                                 entries.OrderByDescending(e => e.Version).FirstOrDefault();
 
-                if (matchingEntry == null)
+                if (latestEntry == null)
                 {
-                    Debug.LogError($"[Version Check] No changelog entry found for version {remoteVersion}");
+                    Debug.LogError("[Version Check] No changelog entries found");
                     File.Delete(tempChangelogPath);
                     return null;
                 }
-                Debug.Log($"[Version Check] Found matching changelog entry for version {matchingEntry.Version}");
+                Debug.Log($"[Version Check] Found latest changelog entry for version {latestEntry.Version}");
 
                 // Get the latest commit hash from GitHub API
                 string remoteHash = null;
@@ -440,16 +437,18 @@ namespace Translations
                 var versionInfo = new VersionInfo
                 {
                     version = remoteVersion,
-                    releaseDate = matchingEntry.Date,
-                    changes = matchingEntry.GetAllChanges(),
+                    releaseDate = latestEntry.Date,
+                    changes = latestEntry.GetAllChanges(),
                     minUnityVersion = "2020.3", // This should ideally be read from the remote package.json
                     downloadUrl = "https://github.com/BrendanRobins97/TranslationDoneRight",
-                    commitHash = remoteHash
+                    commitHash = remoteHash,
+                    HasUpdate = hasUpdates
                 };
 
                 // Clean up temporary file
                 File.Delete(tempChangelogPath);
-                Debug.Log("[Version Check] Successfully created version info for update.");
+                Debug.Log("[Version Check] Successfully created version info.");
+                Debug.Log($"[Version Check] Update available: {versionInfo.HasUpdate}");
 
                 return versionInfo;
             }

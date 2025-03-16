@@ -25,7 +25,7 @@ namespace Translations
                 _window.Close();
             }
 
-            _window = GetWindow<UpdateNotificationWindow>(true, "Update Available");
+            _window = GetWindow<UpdateNotificationWindow>(true, updateInfo.HasUpdate ? "Update Available" : "Latest Changes");
             _window._updateInfo = updateInfo;
             _window.minSize = new Vector2(600, 500);
             _window.maxSize = new Vector2(800, 700);
@@ -86,7 +86,7 @@ namespace Translations
             EditorGUILayout.Space(10);
 
             // Header
-            EditorGUILayout.LabelField("New Version Available!", _headerStyle);
+            EditorGUILayout.LabelField(_updateInfo.HasUpdate ? "New Version Available!" : "Latest Changes", _headerStyle);
 
             // Version info
             using (new EditorGUILayout.HorizontalScope())
@@ -119,19 +119,19 @@ namespace Translations
             // Update button
             using (new EditorGUILayout.HorizontalScope())
             {
-                GUI.enabled = !_isUpdating;
+                GUI.enabled = !_isUpdating && _updateInfo.HasUpdate;
                 
                 if (GUILayout.Button(_isUpdating ? "Updating..." : "Update Now", GUILayout.Height(30)))
                 {
                     UpdatePackage();
                 }
 
-                if (GUILayout.Button("Remind Me Later", GUILayout.Height(30)))
+                GUI.enabled = true;
+
+                if (GUILayout.Button("Close", GUILayout.Height(30)))
                 {
                     Close();
                 }
-                
-                GUI.enabled = true;
             }
 
             EditorGUILayout.Space(5);

@@ -267,47 +267,52 @@ namespace Translations
                     return false;
                 }
 
+                Debug.Log($"[Version Check] Found packages-lock.json at: {packagesLockPath}");
+
                 // Read and parse the packages-lock.json file
                 string jsonContent = File.ReadAllText(packagesLockPath);
-                // Unity's JsonUtility doesn't handle dictionary deserialization well, so we'll use string parsing
-                if (!jsonContent.Contains("\"com.flamboozle.translations-done-right\""))
+                
+                // Extract the current hash from packages-lock.json
+                var currentHashMatch = Regex.Match(jsonContent, "\"com\\.flamboozle\\.translations-done-right\"[^}]+\"hash\":\\s*\"([a-f0-9]+)\"");
+                if (!currentHashMatch.Success)
                 {
-                    Debug.LogError("[Version Check] Package not found in packages-lock.json");
+                    Debug.LogError("[Version Check] Could not find package hash in packages-lock.json");
                     return false;
                 }
+                
+                string currentHash = currentHashMatch.Groups[1].Value;
+                Debug.Log($"[Version Check] Current hash from packages-lock.json: {currentHash}");
 
-                // Use a simple HTTP client to check the latest commit from GitHub
+                // Get the latest commit hash from GitHub API
                 using (var client = new HttpClient())
                 {
                     client.DefaultRequestHeaders.Add("User-Agent", "Unity");
                     var response = await client.GetAsync("https://api.github.com/repos/BrendanRobins97/TranslationDoneRight/commits/main");
-                    if (response.IsSuccessStatusCode)
+                    if (!response.IsSuccessStatusCode)
                     {
-                        var content = await response.Content.ReadAsStringAsync();
-                        // Extract the SHA from the response
-                        var match = Regex.Match(content, "\"sha\":\\s*\"([a-f0-9]+)\"");
-                        if (match.Success)
-                        {
-                            string remoteHash = match.Groups[1].Value;
-                            
-                            // Now find the current hash in packages-lock.json
-                            match = Regex.Match(jsonContent, "\"com.flamboozle.translations-done-right\"[^}]+\"hash\":\\s*\"([a-f0-9]+)\"");
-                            if (match.Success)
-                            {
-                                string currentHash = match.Groups[1].Value;
-                                Debug.Log($"[Version Check] Current hash: {currentHash}");
-                                Debug.Log($"[Version Check] Remote hash: {remoteHash}");
-                                return currentHash != remoteHash;
-                            }
-                        }
+                        Debug.LogError($"[Version Check] GitHub API request failed with status: {response.StatusCode}");
+                        return false;
                     }
-                }
 
-                return false;
+                    var content = await response.Content.ReadAsStringAsync();
+                    var remoteHashMatch = Regex.Match(content, "\"sha\":\\s*\"([a-f0-9]+)\"");
+                    if (!remoteHashMatch.Success)
+                    {
+                        Debug.LogError("[Version Check] Could not find commit hash in GitHub API response");
+                        return false;
+                    }
+
+                    string remoteHash = remoteHashMatch.Groups[1].Value;
+                    Debug.Log($"[Version Check] Remote hash from GitHub: {remoteHash}");
+
+                    bool hasChanges = currentHash != remoteHash;
+                    Debug.Log($"[Version Check] Has changes: {hasChanges}");
+                    return hasChanges;
+                }
             }
             catch (Exception e)
             {
-                Debug.LogError($"[Version Check] Error checking for updates: {e.Message}");
+                Debug.LogError($"[Version Check] Error checking for updates: {e.Message}\nStack trace: {e.StackTrace}");
                 return false;
             }
         }

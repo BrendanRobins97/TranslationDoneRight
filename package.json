@@ -1,6 +1,6 @@
 {
   "name": "com.flamboozle.translations-done-right",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "displayName": "Translations Done Right",
   "description": "A powerful localization and translations management system for Unity with intelligent text similarity detection, automated extraction, and comprehensive editor tools.",
   "unity": "2020.3",

@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.5] - 2024-03-16
+### Fixed
+- Version checking in Package Manager installations
+- Current version detection from packages-lock.json
+- Update notification window now shows latest changes even when up-to-date
+
 ## [1.0.4]
 ### Added
 - Support for custom extraction patterns
@@ -32,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - TextMeshPro support
 - Basic documentation
 
+[1.0.5]: https://github.com/BrendanRobins97/TranslationDoneRight/compare/v1.0.4...v1.0.5
 [1.0.4]: https://github.com/BrendanRobins97/TranslationDoneRight/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/BrendanRobins97/TranslationDoneRight/compare/v1.0.0...v1.0.3
 [1.0.0]: https://github.com/BrendanRobins97/TranslationDoneRight/releases/tag/v1.0.0 

@@ -41,8 +41,32 @@ namespace Translations
         {
             get
             {
+                // First try Assets folder
                 string packageJsonPath = Path.Combine(Application.dataPath, "Translations Done Right/package.json");
-                if (File.Exists(packageJsonPath))
+                
+                // If not in Assets, check Package Cache
+                if (!File.Exists(packageJsonPath))
+                {
+                    // Find the package in the packages-lock.json to get its version
+                    string packagesLockPath = GetPackagesLockPath();
+                    if (packagesLockPath != null)
+                    {
+                        try
+                        {
+                            string jsonContent = File.ReadAllText(packagesLockPath);
+                            var currentHashMatch = Regex.Match(jsonContent, "\"com\\.flamboozle\\.translations-done-right\"[^}]+\"version\":\\s*\"([^\"]+)\"");
+                            if (currentHashMatch.Success)
+                            {
+                                return currentHashMatch.Groups[1].Value;
+                            }
+                        }
+                        catch (Exception e)
+                        {
+                            Debug.LogError($"Error reading package version from packages-lock.json: {e.Message}");
+                        }
+                    }
+                }
+                else
                 {
                     try
                     {
@@ -55,6 +79,7 @@ namespace Translations
                         Debug.LogError($"Error reading package version: {e.Message}");
                     }
                 }
+                
                 return "1.0.0"; // Fallback version
             }
         }

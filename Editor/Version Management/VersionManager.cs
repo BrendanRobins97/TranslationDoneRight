@@ -10,6 +10,7 @@ using System.Diagnostics;
 using System.Text.RegularExpressions;
 using Debug = UnityEngine.Debug;
 using System.Linq;
+using Newtonsoft.Json.Linq;
 
 namespace Translations
 {
@@ -55,65 +56,69 @@ namespace Translations
                         try
                         {
                             string jsonContent = File.ReadAllText(packagesLockPath);
-                            // Parse the packages-lock.json to get the hash
-                            var packageLock = JsonUtility.FromJson<PackageLockInfo>(jsonContent);
                             
-                            if (packageLock?.dependencies != null && 
-                                packageLock.dependencies.ContainsKey("com.flamboozle.translations-done-right"))
+                            // Use JObject to parse the JSON since it has a more complex structure
+                            var packageLock = JObject.Parse(jsonContent);
+                            var dependencies = packageLock["dependencies"];
+                            
+                            if (dependencies != null)
                             {
-                                var packageInfo = packageLock.dependencies["com.flamboozle.translations-done-right"];
-                                string hash = packageInfo.hash;
-                                
-                                if (!string.IsNullOrEmpty(hash))
+                                var packageInfo = dependencies["com.flamboozle.translations-done-right"];
+                                if (packageInfo != null)
                                 {
-                                    // Get the tag for this commit hash using git
-                                    string packagePath = GetPackagePath();
-                                    if (packagePath != null)
+                                    string hash = packageInfo["hash"]?.ToString();
+                                    
+                                    if (!string.IsNullOrEmpty(hash))
                                     {
-                                        try
+                                        // Get the tag for this commit hash using git
+                                        string packagePath = GetPackagePath();
+                                        if (packagePath != null)
                                         {
-                                            // Try to get the tag that points to this commit
-                                            var tagTask = ExecuteGitCommand($"describe --tags --exact-match {hash}", packagePath);
-                                            tagTask.Wait();
-                                            string tag = tagTask.Result;
-                                            
-                                            if (!string.IsNullOrEmpty(tag))
+                                            try
                                             {
-                                                // Remove the 'v' prefix if present
-                                                if (tag.StartsWith("v"))
+                                                // Try to get the tag that points to this commit
+                                                var tagTask = ExecuteGitCommand($"describe --tags --exact-match {hash}", packagePath);
+                                                tagTask.Wait();
+                                                string tag = tagTask.Result;
+                                                
+                                                if (!string.IsNullOrEmpty(tag))
                                                 {
-                                                    tag = tag.Substring(1);
+                                                    // Remove the 'v' prefix if present
+                                                    if (tag.StartsWith("v"))
+                                                    {
+                                                        tag = tag.Substring(1);
+                                                    }
+                                                    return tag;
                                                 }
-                                                return tag;
                                             }
-                                        }
-                                        catch (Exception e)
-                                        {
-                                            Debug.LogWarning($"[Version Check] Could not get version from git tag: {e.Message}");
-                                        }
-                                        
-                                        // If we couldn't get the tag, try to get version from package.json at this commit
-                                        try
-                                        {
-                                            var packageJsonTask = ExecuteGitCommand($"show {hash}:package.json", packagePath);
-                                            packageJsonTask.Wait();
-                                            string packageJson = packageJsonTask.Result;
-                                            var packageData = JsonUtility.FromJson<PackageInfo>(packageJson);
-                                            if (!string.IsNullOrEmpty(packageData?.version))
+                                            catch (Exception e)
                                             {
-                                                return packageData.version;
+                                                Debug.LogWarning($"[Version Check] Could not get version from git tag: {e.Message}");
                                             }
-                                        }
-                                        catch (Exception e)
-                                        {
-                                            Debug.LogWarning($"[Version Check] Could not get version from package.json at commit: {e.Message}");
+                                            
+                                            // If we couldn't get the tag, try to get version from package.json at this commit
+                                            try
+                                            {
+                                                var packageJsonTask = ExecuteGitCommand($"show {hash}:package.json", packagePath);
+                                                packageJsonTask.Wait();
+                                                string packageJson = packageJsonTask.Result;
+                                                var packageData = JsonUtility.FromJson<PackageInfo>(packageJson);
+                                                if (!string.IsNullOrEmpty(packageData?.version))
+                                                {
+                                                    return packageData.version;
+                                                }
+                                            }
+                                            catch (Exception e)
+                                            {
+                                                Debug.LogWarning($"[Version Check] Could not get version from package.json at commit: {e.Message}");
+                                            }
                                         }
                                     }
                                 }
-                            }
-                            else
-                            {
-                                Debug.LogError("[Version Check] Package not found in packages-lock.json");
+                                else
+                                {
+                                    Debug.LogError("[Version Check] Package not found in packages-lock.json");
+                                }
                             }
                         }
                         catch (Exception e)

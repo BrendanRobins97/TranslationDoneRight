@@ -67,10 +67,10 @@ namespace Translations
                                 if (!string.IsNullOrEmpty(hash))
                                 {
                                     // Get the tag for this commit hash using git
-                                    try
+                                    string packagePath = GetPackagePath();
+                                    if (packagePath != null)
                                     {
-                                        string packagePath = GetPackagePath();
-                                        if (packagePath != null)
+                                        try
                                         {
                                             // Try to get the tag that points to this commit
                                             var tagTask = ExecuteGitCommand($"describe --tags --exact-match {hash}", packagePath);
@@ -87,27 +87,27 @@ namespace Translations
                                                 return tag;
                                             }
                                         }
-                                    }
-                                    catch (Exception e)
-                                    {
-                                        Debug.LogWarning($"[Version Check] Could not get version from git tag: {e.Message}");
-                                    }
-                                    
-                                    // If we couldn't get the tag, try to get version from package.json at this commit
-                                    try
-                                    {
-                                        var packageJsonTask = ExecuteGitCommand($"show {hash}:package.json", packagePath);
-                                        packageJsonTask.Wait();
-                                        string packageJson = packageJsonTask.Result;
-                                        var packageData = JsonUtility.FromJson<PackageInfo>(packageJson);
-                                        if (!string.IsNullOrEmpty(packageData?.version))
+                                        catch (Exception e)
                                         {
-                                            return packageData.version;
+                                            Debug.LogWarning($"[Version Check] Could not get version from git tag: {e.Message}");
                                         }
-                                    }
-                                    catch (Exception e)
-                                    {
-                                        Debug.LogWarning($"[Version Check] Could not get version from package.json at commit: {e.Message}");
+                                        
+                                        // If we couldn't get the tag, try to get version from package.json at this commit
+                                        try
+                                        {
+                                            var packageJsonTask = ExecuteGitCommand($"show {hash}:package.json", packagePath);
+                                            packageJsonTask.Wait();
+                                            string packageJson = packageJsonTask.Result;
+                                            var packageData = JsonUtility.FromJson<PackageInfo>(packageJson);
+                                            if (!string.IsNullOrEmpty(packageData?.version))
+                                            {
+                                                return packageData.version;
+                                            }
+                                        }
+                                        catch (Exception e)
+                                        {
+                                            Debug.LogWarning($"[Version Check] Could not get version from package.json at commit: {e.Message}");
+                                        }
                                     }
                                 }
                             }

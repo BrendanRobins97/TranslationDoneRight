@@ -54,12 +54,6 @@ namespace Translations
             GetWindow<TranslationsEditorWindow>("Translations Manager");
         }
 
-        [MenuItem("Window/Translations/Check for Updates")]
-        public static void CheckForUpdates()
-        {
-            VersionManager.CheckForUpdatesAndShowWindow();
-        }
-
         private void OnEnable()
         {
             translationData = TranslationDataProvider.Data;
@@ -89,9 +83,6 @@ namespace Translations
             TextExtractor.OnExtractionError += HandleExtractionError;
             TextExtractor.OnExtractorStarted += HandleExtractorStarted;
             TextExtractor.OnExtractorFinished += HandleExtractorFinished;
-
-            // Check for updates
-            VersionManager.ShowUpdateNotificationIfNeeded();
         }
 
         private void OnDisable()

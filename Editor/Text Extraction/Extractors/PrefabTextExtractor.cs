@@ -99,7 +99,7 @@ namespace Translations
                             
                             try
                             {
-                                if (textObject.GetComponent<DynamicTMP>())
+                                if (textObject.GetComponent<NotTranslatedTMP>())
                                     continue;
 
                                 if (!string.IsNullOrWhiteSpace(textObject.text))
@@ -110,9 +110,7 @@ namespace Translations
                                     {
                                         sourceType = TextSourceType.Prefab,
                                         sourcePath = path,
-                                        objectPath = GetGameObjectPath(textObject.gameObject),
-                                        componentName = textObject.GetType().Name,
-                                        fieldName = "text",
+                                        // Simplified source info
                                     };
                                     metadata.AddSource(textObject.text, sourceInfo);
                                 }
@@ -142,7 +140,7 @@ namespace Translations
                             
                             try
                             {
-                                if (uiText.GetComponent<DynamicTMP>())
+                                if (uiText.GetComponent<NotTranslatedTMP>())
                                     continue;
 
                                 if (!string.IsNullOrWhiteSpace(uiText.text))
@@ -153,9 +151,7 @@ namespace Translations
                                     {
                                         sourceType = TextSourceType.Prefab,
                                         sourcePath = path,
-                                        objectPath = GetGameObjectPath(uiText.gameObject),
-                                        componentName = uiText.GetType().Name,
-                                        fieldName = "text",
+                                        // Simplified source info
                                     };
                                     metadata.AddSource(uiText.text, sourceInfo);
                                 }

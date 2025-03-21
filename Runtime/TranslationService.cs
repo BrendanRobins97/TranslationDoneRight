@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using UnityEngine;
 using TMPro;
+using UnityEngine.SceneManagement;
+using System;
 
 namespace Translations
 {
@@ -10,9 +12,9 @@ namespace Translations
     /// </summary>
     public static class TranslationService
     {
-        private static Dictionary<TextMeshProUGUI, string> originalTexts = new Dictionary<TextMeshProUGUI, string>();
-        private static Dictionary<TextMeshProUGUI, TMP_FontAsset> originalFonts = new Dictionary<TextMeshProUGUI, TMP_FontAsset>();
         private static bool isInitialized = false;
+        private static readonly HashSet<int> processedTMPInstanceIDs = new HashSet<int>();
+        private static readonly List<GameObject> batchUpdateList = new List<GameObject>(32);
         
         /// <summary>
         /// Initialize the translation service. Call this at application startup.
@@ -22,61 +24,62 @@ namespace Translations
         {
             if (isInitialized) return;
             
-            TranslationManager.OnLanguageChanged += Refresh;
-            Refresh();
+            SceneManager.sceneLoaded += OnSceneLoaded;
+            FindAndSetupTMPs();
             isInitialized = true;
         }
 
-        public static void Refresh()
+        private static void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
-            StoreOriginalTexts();
-            UpdateAllTexts();
-        }
-
-        private static void StoreOriginalTexts()
-        {
-            TextMeshProUGUI[] textObjects = Object.FindObjectsOfType<TextMeshProUGUI>();
-
-            foreach (TextMeshProUGUI textObject in textObjects)
+            // Only clear when loading single or first scene
+            if (mode == LoadSceneMode.Single) 
             {
-                // Skip over TMPs that are dynamic
-                if (textObject.GetComponent<DynamicTMP>())
+                processedTMPInstanceIDs.Clear();
+            }
+            FindAndSetupTMPs();
+        }
+        
+        private static void FindAndSetupTMPs()
+        {
+            batchUpdateList.Clear();
+            
+            // Get all TMPs in the current scene - fastest version of FindObjectsOfType
+            var textObjects = UnityEngine.Object.FindObjectsOfType<TextMeshProUGUI>(false);
+
+            foreach (var textObject in textObjects)
+            {
+                // Skip null objects (could happen after scene unload)
+                if (textObject == null) continue;
+                
+                int instanceID = textObject.GetInstanceID();
+                
+                // Skip if we've already processed this TMP
+                if (processedTMPInstanceIDs.Contains(instanceID))
                 {
                     continue;
                 }
-                if (!originalTexts.ContainsKey(textObject))
+
+                // Cache component lookups
+                var gameObject = textObject.gameObject;
+                var notTranslated = gameObject.GetComponent<NotTranslatedTMP>();
+                var translatedTMP = gameObject.GetComponent<TranslatedTMP>();
+
+                // Skip over TMPs that are dynamic or already have TranslatedTMP
+                if (notTranslated != null || translatedTMP != null)
                 {
-                    originalTexts[textObject] = textObject.text;
+                    processedTMPInstanceIDs.Add(instanceID);
+                    continue;
                 }
 
-                if (!originalFonts.ContainsKey(textObject))
-                {
-                    originalFonts[textObject] = textObject.font;
-                }
+                // Add to batch update list
+                batchUpdateList.Add(gameObject);
+                processedTMPInstanceIDs.Add(instanceID);
             }
-        }
-
-        private static void UpdateAllTexts()
-        {
-            foreach (var entry in originalTexts)
+            
+            // Batch process component additions
+            for (int i = 0; i < batchUpdateList.Count; i++)
             {
-                TextMeshProUGUI textObject = entry.Key;
-
-                string originalText = entry.Value;
-                textObject.text = TranslationManager.Translate(originalText);
-
-                var tmpFontAsset = originalFonts.TryGetValue(textObject, out var textFont) ? textFont : textObject.font;
-                if (TranslationManager.TranslationData.fonts.TryGetValue(tmpFontAsset, out var fontDictionary)
-                    && fontDictionary.TryGetValue(TranslationManager.CurrentLanguage, out var font))
-                {
-                    // Change font
-                    textObject.font = font;
-                }
-                else
-                {
-                    // Reset font
-                    textObject.font = tmpFontAsset;
-                }
+                batchUpdateList[i].AddComponent<TranslatedTMP>();
             }
         }
     }

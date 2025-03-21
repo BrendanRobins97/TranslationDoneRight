@@ -19,9 +19,7 @@ namespace Translations
     {
         public TextSourceType sourceType;
         public string sourcePath;        // Path to the source asset
-        public string objectPath;        // Full path to the object in hierarchy (for scenes/prefabs)
-        public string componentName;     // Name of the component containing the text
-        public string fieldName;         // Name of the field containing the text
+        // Simplified source info - removed objectPath, componentName, fieldName
     }
 
     [Serializable]
@@ -41,6 +39,21 @@ namespace Translations
     public class TextSourceInfoList
     {
         public List<TextSourceInfo> Items = new List<TextSourceInfo>();
+        private const int MAX_SOURCES = 4; // Limit number of sources to 4
+        
+        public void AddSource(TextSourceInfo source)
+        {
+            // Check if this exact source already exists to avoid duplicates
+            bool sourceExists = Items.Any(existingSource => 
+                existingSource.sourceType == source.sourceType && 
+                existingSource.sourcePath == source.sourcePath);
+            
+            // Only add if it doesn't already exist and we haven't reached the cap
+            if (!sourceExists && Items.Count < MAX_SOURCES)
+            {
+                Items.Add(source);
+            }
+        }
         
         // Implicit conversion operators for easier usage
         public static implicit operator List<TextSourceInfo>(TextSourceInfoList wrapper) => wrapper.Items;
@@ -160,26 +173,8 @@ namespace Translations
                 textSources[text] = new TextSourceInfoList();
             }
             
-            // Check if this exact source already exists to avoid duplicates
-            bool sourceExists = false;
-            foreach (var existingSource in textSources[text].Items)
-            {
-                if (existingSource.sourceType == sourceInfo.sourceType &&
-                    existingSource.sourcePath == sourceInfo.sourcePath &&
-                    existingSource.objectPath == sourceInfo.objectPath &&
-                    existingSource.componentName == sourceInfo.componentName &&
-                    existingSource.fieldName == sourceInfo.fieldName)
-                {
-                    sourceExists = true;
-                    break;
-                }
-            }
-            
-            // Only add if it doesn't already exist
-            if (!sourceExists)
-            {
-                textSources[text].Items.Add(sourceInfo);
-            }
+            // Use the new AddSource method in TextSourceInfoList to handle duplication and capping
+            textSources[text].AddSource(sourceInfo);
 
             // Initialize context if it doesn't exist
             if (!textContexts.ContainsKey(text))

@@ -281,7 +281,7 @@ namespace Translations
         }
         
         // New version that works with local collections
-        private void AddExternalTextInternal(string text, string filePath, string location, HashSet<string> localExtractedText, List<KeyValuePair<string, TextSourceInfo>> localSourceInfos)
+        private void AddExternalTextInternal(string text, string filePath, HashSet<string> localExtractedText, List<KeyValuePair<string, TextSourceInfo>> localSourceInfos)
         {
             // Skip empty or whitespace-only text
             if (string.IsNullOrWhiteSpace(text)) return;
@@ -292,8 +292,7 @@ namespace Translations
             {
                 sourceType = TextSourceType.ExternalFile,
                 sourcePath = filePath,
-                componentName = Path.GetFileName(filePath),
-                fieldName = location
+                // Simplified source info
             };
             
             localSourceInfos.Add(new KeyValuePair<string, TextSourceInfo>(text, sourceInfo));
@@ -327,8 +326,7 @@ namespace Translations
             {
                 sourceType = TextSourceType.ExternalFile,
                 sourcePath = filePath,
-                componentName = Path.GetFileName(filePath),
-                fieldName = location
+                // Simplified source info
             };
             
             metadata.AddSource(text, sourceInfo);
@@ -367,7 +365,7 @@ namespace Translations
                     // Skip likely JSON property names (short, no spaces, etc.)
                     if (value.Length > 3 && !value.All(c => char.IsLetterOrDigit(c) || c == '_'))
                     {
-                        AddExternalTextInternal(value, filePath, "json/value", localExtractedText, localSourceInfos);
+                        AddExternalTextInternal(value, filePath, localExtractedText, localSourceInfos);
                     }
                 }
             }
@@ -380,7 +378,7 @@ namespace Translations
             // Extract simple text
             if (!string.IsNullOrWhiteSpace(entry.text))
             {
-                AddExternalTextInternal(entry.text, filePath, $"{path}/text", localExtractedText, localSourceInfos);
+                AddExternalTextInternal(entry.text, filePath, localExtractedText, localSourceInfos);
             }
 
             // Extract text array
@@ -390,7 +388,7 @@ namespace Translations
                 {
                     if (!string.IsNullOrWhiteSpace(entry.texts[i]))
                     {
-                        AddExternalTextInternal(entry.texts[i], filePath, $"{path}/texts[{i}]", localExtractedText, localSourceInfos);
+                        AddExternalTextInternal(entry.texts[i], filePath, localExtractedText, localSourceInfos);
                     }
                 }
             }
@@ -402,7 +400,7 @@ namespace Translations
                 {
                     if (!string.IsNullOrWhiteSpace(kv.value))
                     {
-                        AddExternalTextInternal(kv.value, filePath, $"{path}/{kv.key}", localExtractedText, localSourceInfos);
+                        AddExternalTextInternal(kv.value, filePath, localExtractedText, localSourceInfos);
                     }
                 }
             }
@@ -460,7 +458,7 @@ namespace Translations
                         string field = fields[colIndex].Trim().Trim('"');
                         if (!string.IsNullOrWhiteSpace(field))
                         {
-                            AddExternalTextInternal(field, filePath, $"row {lineIndex}, col {colIndex}", localExtractedText, localSourceInfos);
+                            AddExternalTextInternal(field, filePath, localExtractedText, localSourceInfos);
                         }
                     }
                 }
@@ -507,7 +505,7 @@ namespace Translations
                 string line = lines[i].Trim();
                 if (!string.IsNullOrWhiteSpace(line))
                 {
-                    AddExternalTextInternal(line, filePath, $"line {i + 1}", localExtractedText, localSourceInfos);
+                    AddExternalTextInternal(line, filePath, localExtractedText, localSourceInfos);
                 }
             }
         }
@@ -524,7 +522,7 @@ namespace Translations
             // Extract text content if it's not just whitespace
             if (node.NodeType == XmlNodeType.Text && !string.IsNullOrWhiteSpace(node.Value))
             {
-                AddExternalTextInternal(node.Value.Trim(), filePath, path, localExtractedText, localSourceInfos);
+                AddExternalTextInternal(node.Value.Trim(), filePath, localExtractedText, localSourceInfos);
             }
 
             // Extract attribute values
@@ -534,7 +532,7 @@ namespace Translations
                 {
                     if (!string.IsNullOrWhiteSpace(attr.Value))
                     {
-                        AddExternalTextInternal(attr.Value, filePath, $"{path}/@{attr.Name}", localExtractedText, localSourceInfos);
+                        AddExternalTextInternal(attr.Value, filePath, localExtractedText, localSourceInfos);
                     }
                 }
             }

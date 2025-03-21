@@ -197,9 +197,6 @@ namespace Translations
                             foreach (var source in sources)
                             {
                                 writer.WriteLine($"    - {source.sourceType} in {source.sourcePath}");
-                                if (!string.IsNullOrEmpty(source.objectPath))
-                                    writer.WriteLine($"      Object: {source.objectPath}");
-                                writer.WriteLine($"      Component: {source.componentName}, Field: {source.fieldName}");
                             }
                         }
                     }
@@ -218,9 +215,6 @@ namespace Translations
                             foreach (var source in sources)
                             {
                                 writer.WriteLine($"    - {source.sourceType} in {source.sourcePath}");
-                                if (!string.IsNullOrEmpty(source.objectPath))
-                                    writer.WriteLine($"      Object: {source.objectPath}");
-                                writer.WriteLine($"      Component: {source.componentName}, Field: {source.fieldName}");
                             }
                         }
                     }

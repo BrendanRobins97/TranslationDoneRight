@@ -630,9 +630,6 @@ namespace Translations
             {
                 sourceType = sourceType,
                 sourcePath = sourcePath,
-                objectPath = objectPath,
-                componentName = obj.GetType().Name,
-                fieldName = memberName,
             };
             metadata.AddSource(text, sourceInfo);
         }

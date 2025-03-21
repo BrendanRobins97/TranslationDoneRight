@@ -1383,24 +1383,6 @@ namespace Translations
                                 }
                             }
 
-                            // If we have component info, show it
-                            if (!string.IsNullOrEmpty(source.componentName))
-                            {
-                                EditorGUILayout.LabelField("Component", source.componentName);
-                            }
-
-                            // If we have field info, show it
-                            if (!string.IsNullOrEmpty(source.fieldName))
-                            {
-                                EditorGUILayout.LabelField("Field", source.fieldName);
-                            }
-
-                            // If we have hierarchy path info, show it
-                            if (!string.IsNullOrEmpty(source.objectPath))
-                            {
-                                EditorGUILayout.LabelField("Path", source.objectPath);
-                            }
-
                             EditorGUI.indentLevel--;
                             EditorGUILayout.Space(5);
                         }

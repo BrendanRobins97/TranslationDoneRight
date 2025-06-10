@@ -21,6 +21,7 @@ namespace Translations
         private AITranslationSystem selectedAISystem = AITranslationSystem.DeepL;
         private string openAIApiKey = "";
         private string openAIModel = "gpt-4o";
+        private string openAICustomPrompt = "Translate the following text from English to {targetLanguage}, preserving all formatting, placeholders, and special syntax. This is for a video game, so use appropriate gaming terminology:\n\n\"{text}\"";
         
         // DeepL specific settings
         private string formality = null; // Can be "more", "less", or null (default)
@@ -398,7 +399,12 @@ namespace Translations
             EditorGUILayout.LabelField("Translation Service", EditorStyles.boldLabel);
             EditorGUILayout.Space(3);
             
-            selectedAISystem = (AITranslationSystem)EditorGUILayout.EnumPopup("AI System:", selectedAISystem);
+            AITranslationSystem newAISystem = (AITranslationSystem)EditorGUILayout.EnumPopup("AI System:", selectedAISystem);
+            if (newAISystem != selectedAISystem)
+            {
+                selectedAISystem = newAISystem;
+                SaveEditorPrefs(); // Save immediately when AI system changes
+            }
             EditorGUILayout.Space(8);
             
             // API Settings based on selected AI system
@@ -422,8 +428,42 @@ namespace Translations
             else if (selectedAISystem == AITranslationSystem.OpenAI)
             {
                 // OpenAI specific settings
-                openAIApiKey = EditorGUILayout.PasswordField("OpenAI API Key:", openAIApiKey);
-                openAIModel = EditorGUILayout.TextField("Model:", openAIModel);
+                string newOpenAIApiKey = EditorGUILayout.PasswordField("OpenAI API Key:", openAIApiKey);
+                if (newOpenAIApiKey != openAIApiKey)
+                {
+                    openAIApiKey = newOpenAIApiKey;
+                    SaveEditorPrefs(); // Save immediately when API key changes
+                }
+                
+                string newOpenAIModel = EditorGUILayout.TextField("Model:", openAIModel);
+                if (newOpenAIModel != openAIModel)
+                {
+                    openAIModel = newOpenAIModel;
+                    SaveEditorPrefs(); // Save immediately when model changes
+                }
+                
+                EditorGUILayout.Space(8);
+                
+                // Custom Prompt Section
+                EditorGUILayout.LabelField("Custom Prompt Template", EditorStyles.boldLabel);
+                EditorGUILayout.Space(3);
+                
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.LabelField("Use {targetLanguage} for target language and {text} for the text to translate", EditorStyles.miniLabel);
+                if (GUILayout.Button("Reset to Default", GUILayout.Width(120)))
+                {
+                    openAICustomPrompt = "Translate the following text from English to {targetLanguage}, preserving all formatting, placeholders, and special syntax. This is for a video game, so use appropriate gaming terminology:\n\n\"{text}\"";
+                    SaveEditorPrefs();
+                    GUI.FocusControl(null); // Clear focus to update the text area immediately
+                }
+                EditorGUILayout.EndHorizontal();
+                
+                string newOpenAICustomPrompt = EditorGUILayout.TextArea(openAICustomPrompt, GUILayout.Height(80));
+                if (newOpenAICustomPrompt != openAICustomPrompt)
+                {
+                    openAICustomPrompt = newOpenAICustomPrompt;
+                    SaveEditorPrefs(); // Save immediately when prompt changes
+                }
                 
                 if (string.IsNullOrEmpty(openAIApiKey))
                 {
@@ -1884,7 +1924,6 @@ namespace Translations
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             
             EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("Configuration Logs", EditorStyles.boldLabel);
             showConfigLogs = EditorGUILayout.Foldout(showConfigLogs, "Show Logs", true);
             EditorGUILayout.EndHorizontal();
             
@@ -2243,7 +2282,10 @@ namespace Translations
                     
                     foreach (var text in texts)
                     {
-                        string prompt = $"Translate the following text from English to {targetLanguage}, preserving all formatting, placeholders, and special syntax. This is for a video game UI, so use appropriate gaming terminology:\n\n\"{text}\"";
+                        // Use custom prompt template and replace placeholders
+                        string prompt = openAICustomPrompt
+                            .Replace("{targetLanguage}", targetLanguage)
+                            .Replace("{text}", text);
                         
                         if (!string.IsNullOrEmpty(contextToUse))
                         {

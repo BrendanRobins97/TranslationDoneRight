@@ -199,6 +199,10 @@ namespace Translations
             formalityPreference = EditorPrefs.GetBool("TranslationManager_Formality", true);
             showNewOnly = EditorPrefs.GetBool("TranslationManager_ShowNewOnly", false);
             showMissingStateOnly = EditorPrefs.GetBool("TranslationManager_ShowMissingStateOnly", false);
+            openAIApiKey = EditorPrefs.GetString("TranslationManager_OpenAIApiKey", "");
+            openAIModel = EditorPrefs.GetString("TranslationManager_OpenAIModel", "gpt-4o");
+            openAICustomPrompt = EditorPrefs.GetString("TranslationManager_OpenAICustomPrompt", "Translate the following text from English to {targetLanguage}, preserving all formatting, placeholders, and special syntax. This is for a video game, so use appropriate gaming terminology:\n\n\"{text}\"");
+            selectedAISystem = (AITranslationSystem)EditorPrefs.GetInt("TranslationManager_SelectedAISystem", (int)AITranslationSystem.DeepL);
         }
 
         private void SaveEditorPrefs()
@@ -213,6 +217,10 @@ namespace Translations
             EditorPrefs.SetBool("TranslationManager_Formality", formalityPreference);
             EditorPrefs.SetBool("TranslationManager_ShowNewOnly", showNewOnly);
             EditorPrefs.SetBool("TranslationManager_ShowMissingStateOnly", showMissingStateOnly);
+            EditorPrefs.SetString("TranslationManager_OpenAIApiKey", openAIApiKey);
+            EditorPrefs.SetString("TranslationManager_OpenAIModel", openAIModel);
+            EditorPrefs.SetString("TranslationManager_OpenAICustomPrompt", openAICustomPrompt);
+            EditorPrefs.SetInt("TranslationManager_SelectedAISystem", (int)selectedAISystem);
         }
 
         private void OnGUI()

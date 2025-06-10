@@ -500,8 +500,10 @@ namespace Translations
                 // Calculate total content width based on number of languages
                 float totalContentWidth = columnWidth * (translationData.supportedLanguages.Count);
                 
-                // Get the available view height (subtract header height)
-                float viewHeight = position.height * 0.7f - baseRowHeight;
+                // Calculate available view height more accurately
+                float usedHeight = GUILayoutUtility.GetLastRect().yMax;
+                float viewHeight = position.height - usedHeight - baseRowHeight - 40f; // 40f for bottom padding
+                viewHeight = Mathf.Max(200f, viewHeight); // Ensure minimum height
                 
                 // Create the scroll view rect with padding
                 Rect totalRect = GUILayoutUtility.GetRect(0, viewHeight);
@@ -876,8 +878,13 @@ namespace Translations
             // Calculate total height of all items
             cachedTotalHeight = filteredKeysList.Count * KEY_ROW_HEIGHT;
 
-            // Begin scrollable area with total height
-            Rect scrollViewRect = GUILayoutUtility.GetRect(0, position.height * 0.7f);
+            // Calculate available height more accurately by getting remaining space
+            float usedHeight = GUILayoutUtility.GetLastRect().yMax;
+            float availableHeight = position.height - usedHeight - 40f; // 40f for bottom padding/margins
+            availableHeight = Mathf.Max(100f, availableHeight); // Ensure minimum height
+
+            // Begin scrollable area with calculated available height
+            Rect scrollViewRect = GUILayoutUtility.GetRect(0, availableHeight);
             Rect contentRect = new Rect(0, 0, scrollViewRect.width - 16, cachedTotalHeight); // 16 is scrollbar width
 
             textScrollPosition = GUI.BeginScrollView(scrollViewRect, textScrollPosition, contentRect);

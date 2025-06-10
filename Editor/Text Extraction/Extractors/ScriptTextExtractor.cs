@@ -202,9 +202,76 @@ namespace Translations
                     }
                 }
 
-                currentProgress += progressIncrement;
+                currentProgress += progressIncrement * 0.3f; // 30% for reading files
                 ITextExtractor.ReportProgress(this, currentProgress);
             }
+
+            // Second pass - process all loaded scripts for text extraction
+            var scriptPaths = scriptDataByGuid.Keys.ToArray();
+            float processingIncrement = (progressIncrement * 0.7f) / Math.Max(scriptPaths.Length, 1); // 70% for processing
+            
+            foreach (string guid in scriptPaths)
+            {
+                var (scriptPath, scriptContent) = scriptDataByGuid[guid];
+                
+                // Create script cache for line number lookups
+                var scriptCache = new ScriptCache(scriptContent);
+                
+                // Process each regex pattern
+                for (int patternIndex = 0; patternIndex < _compiledPatterns.Length; patternIndex++)
+                {
+                    var regex = _compiledPatterns[patternIndex];
+                    MatchCollection matches = regex.Matches(scriptContent);
+                    string methodName = _methodNames[patternIndex];
+                    
+                    foreach (Match match in matches)
+                    {
+                        if (match.Groups.Count > 1)
+                        {
+                            string matchedText = match.Groups[1].Value;
+                            extractedText.Add(matchedText);
+                            
+                            // Add source information to metadata
+                            var sourceInfo = new TextSourceInfo
+                            {
+                                sourceType = TextSourceType.Script,
+                                sourcePath = scriptPath
+                            };
+                            
+                            metadata.AddSource(matchedText, sourceInfo);
+                            
+                            // For Format, also extract string arguments
+                            if (methodName == "Format()" && match.Groups.Count > 2)
+                            {
+                                var args = match.Groups[2].Value;
+                                var argMatches = _stringArgPattern.Matches(args);
+                                foreach (Match argMatch in argMatches)
+                                {
+                                    if (argMatch.Groups.Count > 1)
+                                    {
+                                        string argText = argMatch.Groups[1].Value;
+                                        extractedText.Add(argText);
+                                        
+                                        var argSourceInfo = new TextSourceInfo
+                                        {
+                                            sourceType = TextSourceType.Script,
+                                            sourcePath = scriptPath
+                                        };
+                                        
+                                        metadata.AddSource(argText, argSourceInfo);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                currentProgress += processingIncrement;
+                ITextExtractor.ReportProgress(this, currentProgress);
+            }
+            
+            // Ensure we reach 100%
+            ITextExtractor.ReportProgress(this, 1f);
         }
     }
 }

@@ -1,0 +1,79 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &3223420481565242450
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 9051424446688827876}
+  - component: {fileID: 5015276626309980890}
+  m_Layer: 0
+  m_Name: PrefabTest
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &9051424446688827876
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3223420481565242450}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &5015276626309980890
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3223420481565242450}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f17186514e6ff27438fde7efaf95c66e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  testTitle: Test_Prefab_Title
+  testCategories:
+  - Test_Prefab_Category_One
+  - Test_Prefab_Category_Two
+  testMenuItems:
+  - Test_Prefab_Menu_File
+  - Test_Prefab_Menu_Edit
+  testDialogue:
+    speakerName: Test_Prefab_Speaker_Name
+    mainText: Test_Prefab_Main_Dialogue_Text
+    responseOptions:
+    - Test_Prefab_Response_Option_One
+    - Test_Prefab_Response_Option_Two
+    dialogueID: 0
+    isCompleted: 0
+  testItems:
+  - itemName: Test_Prefab_Sword_Name
+    itemDescription: Test_Prefab_Sword_Description
+    category: Test_Prefab_Weapon_Category
+    itemID: 0
+    value: 0
+    isRare: 0
+  - itemName: Test_Prefab_Potion_Name
+    itemDescription: Test_Prefab_Potion_Description
+    category: Test_Prefab_Consumable_Category
+    itemID: 0
+    value: 0
+    isRare: 0
+  testID: test_prefab_001
+  internalKey: internal_prefab_test_key
+  testSmartString: Test_Prefab_Smart_String_With_{playerName}_Placeholder
+  prefabInstanceID: Test_Prefab_Instance_ID
+  prefabAssetPath: Test_Prefab_Asset_Path

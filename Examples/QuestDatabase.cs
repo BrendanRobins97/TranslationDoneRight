@@ -10,10 +10,9 @@ namespace Translations.Examples
 
         private void Start()
         {
-            GetComponent<TextMeshProUGUI>().SetTextTranslated("Testset");
-
             Debug.Log("Test Cutscene Dialogue".TranslateString());
         }
+        
         [SerializeField]
         private QuestDefinition mainQuest = new QuestDefinition(){
             questID = "main_quest_1",

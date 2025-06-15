@@ -123,6 +123,26 @@ namespace Translations
         }
 
         /// <summary>
+        /// Checks if a translation exists for the given text
+        /// </summary>
+        /// <param name="originalText">The text to check for translation</param>
+        /// <returns>True if a translation exists, false otherwise</returns>
+        public static bool HasTranslation(string originalText)
+        {
+            if (string.IsNullOrEmpty(originalText))
+                return false;
+                
+            // First check if this text has a canonical version
+            string canonicalText = TranslationData.GetCanonicalText(originalText);
+            
+            // Use the full text (with disambiguation) for lookup in the translation dictionary
+            string lookupKey = canonicalText;
+            
+            // Check if translation exists using the full key (with disambiguation)
+            return TranslationData.allKeys.Contains(lookupKey);
+        }
+
+        /// <summary>
         /// Translates a smart string with placeholders and replaces the placeholders with provided values
         /// </summary>
         /// <param name="smartText">The smart string with placeholders like {var:format:options}</param>

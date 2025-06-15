@@ -44,10 +44,13 @@ namespace Translations
             // Update Mode Selection
             using (new EditorGUILayout.VerticalScope(EditorGUIStyleUtility.CardStyle))
             {
+                // Centered update mode selection
                 using (new EditorGUILayout.HorizontalScope())
                 {
-                    EditorGUILayout.PrefixLabel(new GUIContent("Update Mode", "Choose how new keys are handled"));
-                    updateMode = (KeyUpdateMode)EditorGUILayout.EnumPopup(updateMode);
+                    GUILayout.FlexibleSpace();
+                    
+                    EditorGUILayout.LabelField(new GUIContent("Update Mode", "Choose how new keys are handled"), GUILayout.Width(80));
+                    updateMode = (KeyUpdateMode)EditorGUILayout.EnumPopup(updateMode, GUILayout.Width(200));
                     
                     string modeDescription = updateMode switch
                     {
@@ -61,6 +64,33 @@ namespace Translations
                     {
                         EditorGUILayout.LabelField(new GUIContent("ⓘ", modeDescription), GUILayout.Width(20));
                     }
+                    
+                    GUILayout.FlexibleSpace();
+                }
+                
+                EditorGUILayout.Space(5);
+                
+                // Centered extraction button
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    GUILayout.FlexibleSpace();
+                    
+                    if (GUILayout.Button(new GUIContent("Extract and Update Keys", "Extract text and update TranslationData asset"), GUILayout.Height(30), GUILayout.Width(200)))
+                    {
+                        if (EditorUtility.DisplayDialog("Extract Text", 
+                            $"This will {(updateMode == KeyUpdateMode.ReplaceCompletely ? "replace" : "merge")} translation keys. Existing translations will be preserved. Continue?", 
+                            "Extract", "Cancel"))
+                        {
+                            var extractedText = TextExtractor.ExtractAllText();
+                            TextExtractor.UpdateTranslationData(translationData, extractedText, updateMode);
+                            needsCoverageUpdate = true;
+                            EditorUtility.SetDirty(TranslationMetaDataProvider.Metadata);
+
+                            AssetDatabase.SaveAssets();
+                        }
+                    }
+                    
+                    GUILayout.FlexibleSpace();
                 }
             }
             EditorGUILayout.Space(10);
@@ -148,8 +178,6 @@ namespace Translations
                                 }
                             }
                             
-                            EditorGUILayout.LabelField($"Priority: {extractor.Priority}", EditorStyles.miniLabel);
-                            
                             if (newEnabled != isEnabled)
                             {
                                 TextExtractor.SetExtractorEnabled(extractorType, newEnabled);
@@ -222,115 +250,61 @@ namespace Translations
             }
             EditorGUILayout.Space(10);
 
-            // Extraction Tools Section
-            showExtractionTools = EditorGUILayout.Foldout(showExtractionTools, "Extraction Tools", true, EditorGUIStyleUtility.FoldoutHeader);
-            if (showExtractionTools)
+            // Similarity Settings Card
+            if (showSimilaritySettings)
             {
-                // Direct Update and Text Similarity Cards (Side by Side)
-                using (new EditorGUILayout.HorizontalScope())
+                using (new EditorGUILayout.VerticalScope(EditorGUIStyleUtility.CardStyle))
                 {
-                    // Direct Update Card
-                    using (new EditorGUILayout.VerticalScope(EditorGUIStyleUtility.CardStyle, GUILayout.Width(cardWidth)))
+                    showSimilaritySettings = EditorGUILayout.Foldout(showSimilaritySettings, "Similarity Settings", true);
+                    if (showSimilaritySettings)
                     {
-                        EditorGUILayout.LabelField("Direct Update", EditorStyles.boldLabel);
-                        EditorGUILayout.LabelField("Updates translation keys while preserving existing translations", EditorStyles.miniLabel);
-                        EditorGUILayout.Space(5);
+                        EditorGUI.indentLevel++;
+                        EditorGUI.BeginChangeCheck();
                         
-                        if (GUILayout.Button(new GUIContent("Extract and Update Keys", "Extract text and update TranslationData asset")))
+                        float newLevenshtein = EditorGUILayoutSliderWithReset(
+                            "General Similarity",
+                            TextSimilarityChecker.LevenshteinThreshold,
+                            0.5f, 1f, 0.85f,
+                            "Minimum similarity threshold for general text comparison"
+                        );
+
+                        float newCaseInsensitive = EditorGUILayoutSliderWithReset(
+                            "Case Differences",
+                            TextSimilarityChecker.CaseInsensitiveThreshold,
+                            0.5f, 1f, 0.95f,
+                            "Threshold for texts that differ only in letter case"
+                        );
+
+                        float newPunctuation = EditorGUILayoutSliderWithReset(
+                            "Punctuation Differences",
+                            TextSimilarityChecker.PunctuationThreshold,
+                            0.5f, 1f, 0.90f,
+                            "Threshold for texts that differ only in punctuation"
+                        );
+
+                        if (EditorGUI.EndChangeCheck())
                         {
-                            if (EditorUtility.DisplayDialog("Extract Text", 
-                                $"This will {(updateMode == KeyUpdateMode.ReplaceCompletely ? "replace" : "merge")} translation keys. Existing translations will be preserved. Continue?", 
-                                "Extract", "Cancel"))
-                            {
-                                var extractedText = TextExtractor.ExtractAllText();
-                                TextExtractor.UpdateTranslationData(translationData, extractedText, updateMode);
-                                needsCoverageUpdate = true;
-                                EditorUtility.SetDirty(TranslationMetaDataProvider.Metadata);
-
-                                AssetDatabase.SaveAssets();
-                            }
+                            TextSimilarityChecker.LevenshteinThreshold = newLevenshtein;
+                            TextSimilarityChecker.CaseInsensitiveThreshold = newCaseInsensitive;
+                            TextSimilarityChecker.PunctuationThreshold = newPunctuation;
                         }
-                    }
-
-                    GUILayout.Space(10);
-
-                    // Text Similarity Tools Card
-                    using (new EditorGUILayout.VerticalScope(EditorGUIStyleUtility.CardStyle, GUILayout.Width(cardWidth)))
-                    {
-                        EditorGUILayout.LabelField("Text Similarity Tools", EditorStyles.boldLabel);
-                        EditorGUILayout.LabelField("Find and manage similar text entries", EditorStyles.miniLabel);
-                        EditorGUILayout.Space(5);
-
-                        using (new EditorGUILayout.HorizontalScope())
-                        {
-                            if (GUILayout.Button(new GUIContent("View Current Groups", "View existing similar text groups")))
-                            {
-                                SimilarityReviewWindow.ShowWindowWithExistingGroups(translationData);
-                            }
-                            if (GUILayout.Button(new GUIContent("Find Similar Texts", "Analyze and find new similar text groups")))
-                            {
-                                SimilarityReviewWindow.ShowWindow(translationData);
-                            }
-                        }
-                    }
-                }
-
-                EditorGUILayout.Space(5);
-
-                // Similarity Settings Card
-                if (showSimilaritySettings)
-                {
-                    using (new EditorGUILayout.VerticalScope(EditorGUIStyleUtility.CardStyle))
-                    {
-                        showSimilaritySettings = EditorGUILayout.Foldout(showSimilaritySettings, "Similarity Settings", true);
-                        if (showSimilaritySettings)
-                        {
-                            EditorGUI.indentLevel++;
-                            EditorGUI.BeginChangeCheck();
-                            
-                            float newLevenshtein = EditorGUILayoutSliderWithReset(
-                                "General Similarity",
-                                TextSimilarityChecker.LevenshteinThreshold,
-                                0.5f, 1f, 0.85f,
-                                "Minimum similarity threshold for general text comparison"
-                            );
-
-                            float newCaseInsensitive = EditorGUILayoutSliderWithReset(
-                                "Case Differences",
-                                TextSimilarityChecker.CaseInsensitiveThreshold,
-                                0.5f, 1f, 0.95f,
-                                "Threshold for texts that differ only in letter case"
-                            );
-
-                            float newPunctuation = EditorGUILayoutSliderWithReset(
-                                "Punctuation Differences",
-                                TextSimilarityChecker.PunctuationThreshold,
-                                0.5f, 1f, 0.90f,
-                                "Threshold for texts that differ only in punctuation"
-                            );
-
-                            if (EditorGUI.EndChangeCheck())
-                            {
-                                TextSimilarityChecker.LevenshteinThreshold = newLevenshtein;
-                                TextSimilarityChecker.CaseInsensitiveThreshold = newCaseInsensitive;
-                                TextSimilarityChecker.PunctuationThreshold = newPunctuation;
-                            }
-                            EditorGUI.indentLevel--;
-                        }
+                        EditorGUI.indentLevel--;
                     }
                 }
             }
             EditorGUILayout.Space(10);
 
-            // CSV Management Section
-            showCSVTools = EditorGUILayout.Foldout(showCSVTools, "CSV Management", true, EditorGUIStyleUtility.FoldoutHeader);
+            // Tools Section
+            showCSVTools = EditorGUILayout.Foldout(showCSVTools, "Tools", true, EditorGUIStyleUtility.FoldoutHeader);
             if (showCSVTools)
             {
-                // CSV Import/Export Cards (Side by Side)
+                float thirdCardWidth = (position.width - 60) / 3; // Account for spacing between cards
+                
+                // Three-column layout: CSV Export, CSV Import, Text Similarity
                 using (new EditorGUILayout.HorizontalScope())
                 {
                     // CSV Export Card
-                    using (new EditorGUILayout.VerticalScope(EditorGUIStyleUtility.CardStyle, GUILayout.Width(cardWidth)))
+                    using (new EditorGUILayout.VerticalScope(EditorGUIStyleUtility.CardStyle, GUILayout.Width(thirdCardWidth)))
                     {
                         EditorGUILayout.LabelField("CSV Export", EditorStyles.boldLabel);
                         EditorGUILayout.LabelField("Export translations to CSV format for external editing", EditorStyles.miniLabel);
@@ -353,7 +327,7 @@ namespace Translations
                     GUILayout.Space(10);
 
                     // CSV Import and Reports Card
-                    using (new EditorGUILayout.VerticalScope(EditorGUIStyleUtility.CardStyle, GUILayout.Width(cardWidth)))
+                    using (new EditorGUILayout.VerticalScope(EditorGUIStyleUtility.CardStyle, GUILayout.Width(thirdCardWidth)))
                     {
                         EditorGUILayout.LabelField("CSV Import", EditorStyles.boldLabel);
                         EditorGUILayout.LabelField("Import translations and generate reports", EditorStyles.miniLabel);
@@ -368,6 +342,25 @@ namespace Translations
                         if (GUILayout.Button(new GUIContent("Generate Report", "Create a detailed translation status report")))
                         {
                             GenerateReport();
+                        }
+                    }
+
+                    GUILayout.Space(10);
+
+                    // Text Similarity Tools Card
+                    using (new EditorGUILayout.VerticalScope(EditorGUIStyleUtility.CardStyle, GUILayout.Width(thirdCardWidth)))
+                    {
+                        EditorGUILayout.LabelField("Text Similarity Tools", EditorStyles.boldLabel);
+                        EditorGUILayout.LabelField("Find and manage similar text entries", EditorStyles.miniLabel);
+                        EditorGUILayout.Space(5);
+
+                        if (GUILayout.Button(new GUIContent("View Current Groups", "View existing similar text groups")))
+                        {
+                            SimilarityReviewWindow.ShowWindowWithExistingGroups(translationData);
+                        }
+                        if (GUILayout.Button(new GUIContent("Find Similar Texts", "Analyze and find new similar text groups")))
+                        {
+                            SimilarityReviewWindow.ShowWindow(translationData);
                         }
                     }
                 }

@@ -44,7 +44,7 @@ namespace Translations
             batchUpdateList.Clear();
             
             // Get all TMPs in the current scene - fastest version of FindObjectsOfType
-            var textObjects = UnityEngine.Object.FindObjectsOfType<TextMeshProUGUI>(false);
+            var textObjects = UnityEngine.Object.FindObjectsOfType<TextMeshProUGUI>(true);
 
             foreach (var textObject in textObjects)
             {

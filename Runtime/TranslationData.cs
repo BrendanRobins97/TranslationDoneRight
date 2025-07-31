@@ -14,12 +14,24 @@ using UnityEngine.AddressableAssets;
 
 namespace Translations
 {
+    public enum MissingTextBehavior
+    {
+        ReturnNativeLanguage = 0,    // Default - return the original text in native language
+        ReturnBlank = 1,             // Return empty string
+        ReturnMissingMessage = 2     // Return "TRANSLATION MISSING"
+    }
+
     [CreateAssetMenu(fileName = "TranslationData", menuName = "Localization/TranslationData")]
     public class TranslationData : ScriptableObject
     {
         // Default language setting
         [SerializeField]
         public string defaultLanguage = "English";
+
+        // Missing text behavior setting
+        [SerializeField]
+        [Tooltip("What to return when text is missing from translations or is blank")]
+        public MissingTextBehavior missingTextBehavior = MissingTextBehavior.ReturnNativeLanguage;
 
         // Add list of supported languages
         public List<string> supportedLanguages = new List<string>();

@@ -115,19 +115,13 @@ namespace Translations
             }
 
             // Look up the translation using the full key (with disambiguation)
-            if (translations.TryGetValue(lookupKey, out var translatedText))
+            if (translations.TryGetValue(lookupKey, out var translatedText) && !string.IsNullOrEmpty(translatedText))
             {
                 return translatedText;
             }
 
-            // If no translation found, use the canonical text but with disambiguation removed
-            int disambiguationIndex = canonicalText.IndexOf('|');
-            if (disambiguationIndex > 0 && disambiguationIndex < canonicalText.Length - 1)
-            {
-                return canonicalText.Substring(0, disambiguationIndex);
-            }
-            // No disambiguation, return as is
-            return canonicalText;
+            // Handle missing or empty translation based on the configured behavior
+            return HandleMissingTranslation(canonicalText);
         }
 
         /// <summary>
@@ -177,6 +171,34 @@ namespace Translations
             }
             
             return translatedWithPlaceholders;
+        }
+
+        /// <summary>
+        /// Handles missing translations based on the configured behavior
+        /// </summary>
+        /// <param name="canonicalText">The canonical text that was requested</param>
+        /// <returns>The appropriate fallback text based on the missing text behavior setting</returns>
+        private static string HandleMissingTranslation(string canonicalText)
+        {
+            switch (TranslationData.missingTextBehavior)
+            {
+                case MissingTextBehavior.ReturnBlank:
+                    return string.Empty;
+                    
+                case MissingTextBehavior.ReturnMissingMessage:
+                    return "TRANSLATION MISSING";
+                    
+                case MissingTextBehavior.ReturnNativeLanguage:
+                default:
+                    // Return the canonical text but with disambiguation removed
+                    int disambiguationIndex = canonicalText.IndexOf('|');
+                    if (disambiguationIndex > 0 && disambiguationIndex < canonicalText.Length - 1)
+                    {
+                        return canonicalText.Substring(0, disambiguationIndex);
+                    }
+                    // No disambiguation, return as is
+                    return canonicalText;
+            }
         }
 
         private static void UnloadCurrentLanguage()

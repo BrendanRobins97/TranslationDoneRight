@@ -223,6 +223,40 @@ namespace Translations
                 "Default location: " + TranslationDataProvider.DefaultBaseFolder, 
                 MessageType.Info);
             
+            EditorGUILayout.Space(15);
+            
+            // Missing Text Behavior Setting
+            EditorGUILayout.LabelField("Missing Text Behavior", EditorStyles.boldLabel);
+            EditorGUILayout.Space(3);
+            
+            var newMissingTextBehavior = (MissingTextBehavior)EditorGUILayout.EnumPopup(
+                new GUIContent("When text is missing:", "What to return when a translation is not found or is blank"),
+                translationData.missingTextBehavior
+            );
+            
+            if (newMissingTextBehavior != translationData.missingTextBehavior)
+            {
+                Undo.RecordObject(translationData, "Change Missing Text Behavior");
+                translationData.missingTextBehavior = newMissingTextBehavior;
+                EditorUtility.SetDirty(translationData);
+                AddConfigLog($"Missing text behavior changed to: {newMissingTextBehavior}");
+            }
+            
+            // Help text for the missing text behavior setting
+            string helpText = translationData.missingTextBehavior switch
+            {
+                MissingTextBehavior.ReturnNativeLanguage => "Returns the original text in the native language",
+                MissingTextBehavior.ReturnBlank => "Returns an empty string",
+                MissingTextBehavior.ReturnMissingMessage => "Returns 'TRANSLATION MISSING'",
+                _ => ""
+            };
+            
+            if (!string.IsNullOrEmpty(helpText))
+            {
+                EditorGUILayout.Space(2);
+                EditorGUILayout.HelpBox(helpText, MessageType.Info);
+            }
+            
             EditorGUILayout.EndVertical();
         }
         

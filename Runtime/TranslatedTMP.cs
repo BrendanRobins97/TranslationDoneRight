@@ -107,7 +107,13 @@ namespace Translations
             
             isInitialized = true;
             SubscribeToEvents();
-            UpdateTranslation();
+
+            if (TranslationManager.HasLanguageLoaded)
+            {
+                UpdateTranslation();
+            } else {
+                tmpText.text = "...";
+            }
         }
 
         private void UpdateTranslation()
@@ -116,6 +122,7 @@ namespace Translations
 
             // Skip if language hasn't changed and we have a cached translation
             string currentLanguage = TranslationManager.CurrentLanguage;
+
             if (lastLanguage == currentLanguage && lastTranslatedText != null)
             {
                 return;

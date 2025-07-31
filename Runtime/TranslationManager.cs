@@ -41,6 +41,16 @@ namespace Translations
             }
         }
 
+        public static bool IsDefaultLanguage
+        {
+            get
+            {
+                return currentLanguage == TranslationData.defaultLanguage;
+            }
+        }
+
+        public static bool HasLanguageLoaded => IsDefaultLanguage || currentLanguageAssetRef != null;
+
         static TranslationManager()
         {
             LoadLanguage();
@@ -100,7 +110,6 @@ namespace Translations
                     // Return only the base word without the disambiguation
                     return canonicalText.Substring(0, pipeIndex);
                 }
-                
                 // No disambiguation, return as is
                 return canonicalText;
             }
@@ -117,7 +126,6 @@ namespace Translations
             {
                 return canonicalText.Substring(0, disambiguationIndex);
             }
-            
             // No disambiguation, return as is
             return canonicalText;
         }

@@ -8,6 +8,7 @@ namespace Translations.UI
     /// <summary>
     /// Component that populates a dropdown with available languages and handles language switching.
     /// Can be attached to a TMP_Dropdown or legacy Dropdown component.
+    /// For native language font support in dropdown items, add LanguageDropdownItemFont component to the dropdown template.
     /// </summary>
     [AddComponentMenu("Translations/Language Dropdown")]
     public class LanguageDropdown : MonoBehaviour
@@ -18,12 +19,6 @@ namespace Translations.UI
         [Tooltip("Should dropdown display language names in their native form")]
         [SerializeField] private bool useNativeLanguageNames = true;
         
-        [Tooltip("Whether to include language flags in the dropdown")]
-        [SerializeField] private bool includeFlags = true;
-        
-        [Tooltip("Optional sprites to use as flags for each language. Should match the order in TranslationData.supportedLanguages")]
-        [SerializeField] private List<Sprite> languageFlags;
-
         // References to potential dropdown components
         private TMP_Dropdown tmpDropdown;
         private Dropdown legacyDropdown;
@@ -33,6 +28,9 @@ namespace Translations.UI
         
         // Dictionary mapping dropdown indices to language codes
         private Dictionary<int, string> indexToLanguage = new Dictionary<int, string>();
+        
+        // Font handling for the main label
+        private TMP_FontAsset originalCaptionFont;
         
         // Dictionary of native language names (if available)
         private static readonly Dictionary<string, string> NativeLanguageNames = new Dictionary<string, string>
@@ -60,7 +58,7 @@ namespace Translations.UI
             // Get dropdown components
             tmpDropdown = GetComponent<TMP_Dropdown>();
             legacyDropdown = GetComponent<Dropdown>();
-            
+
             if (tmpDropdown == null && legacyDropdown == null)
             {
                 Debug.LogError("LanguageDropdown requires either a TMP_Dropdown or legacy Dropdown component");
@@ -68,20 +66,39 @@ namespace Translations.UI
                 return;
             }
 
+            foreach (var tmp in GetComponentsInChildren<TMP_Text>())
+            {
+                tmp.gameObject.AddComponent<NotTranslatedTMP>();
+            }
+
+            foreach (var text in GetComponentsInChildren<Text>())
+            {
+                text.gameObject.AddComponent<NotTranslatedTMP>();
+            }
+            
+            // Store original font for the caption
+            if (tmpDropdown != null && tmpDropdown.captionText != null)
+            {
+                originalCaptionFont = tmpDropdown.captionText.font;
+            }
+
             // Subscribe to language changed event
             TranslationManager.OnLanguageChanged += UpdateDropdownSelection;
+            TranslationManager.OnLanguageChanged += UpdateCaptionFont;
         }
 
         private void OnEnable()
         {
             PopulateLanguageDropdown();
             UpdateDropdownSelection();
+            UpdateCaptionFont();
         }
 
         private void OnDestroy()
         {
             // Unsubscribe to prevent memory leaks
             TranslationManager.OnLanguageChanged -= UpdateDropdownSelection;
+            TranslationManager.OnLanguageChanged -= UpdateCaptionFont;
             
             // Remove listeners
             if (tmpDropdown != null)
@@ -91,6 +108,32 @@ namespace Translations.UI
             else if (legacyDropdown != null)
             {
                 legacyDropdown.onValueChanged.RemoveListener(OnDropdownValueChanged);
+            }
+        }
+
+        /// <summary>
+        /// Updates the caption font based on current language (like TranslatedTMP)
+        /// </summary>
+        private void UpdateCaptionFont()
+        {
+            if (tmpDropdown == null || tmpDropdown.captionText == null || originalCaptionFont == null)
+                return;
+                
+            string currentLanguage = TranslationManager.CurrentLanguage;
+            
+            // Look up font for current language
+            TMP_FontAsset fontToUse = originalCaptionFont; // Default
+            
+            if (TranslationManager.TranslationData.fonts.TryGetValue(originalCaptionFont, out var fontDictionary)
+                && fontDictionary.TryGetValue(currentLanguage, out var newFont) && newFont != null)
+            {
+                fontToUse = newFont;
+            }
+            
+            // Set the font
+            if (tmpDropdown.captionText.font != fontToUse)
+            {
+                tmpDropdown.captionText.font = fontToUse;
             }
         }
 
@@ -139,19 +182,13 @@ namespace Translations.UI
                 
                 displayName = string.Format(languageFormat, displayName);
                 
-                Sprite flag = null;
-                if (includeFlags && languageFlags != null && i < languageFlags.Count)
-                {
-                    flag = languageFlags[i];
-                }
-                
                 if (tmpDropdown != null)
                 {
-                    tmpOptions.Add(new TMP_Dropdown.OptionData(displayName, flag, Color.white));
+                    tmpOptions.Add(new TMP_Dropdown.OptionData(displayName));
                 }
                 else if (legacyDropdown != null)
                 {
-                    legacyOptions.Add(new Dropdown.OptionData(displayName, flag));
+                    legacyOptions.Add(new Dropdown.OptionData(displayName));
                 }
             }
             

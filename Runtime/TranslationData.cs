@@ -18,7 +18,7 @@ namespace Translations
     {
         ReturnNativeLanguage = 0,    // Default - return the original text in native language
         ReturnBlank = 1,             // Return empty string
-        ReturnMissingMessage = 2     // Return "TRANSLATION MISSING"
+        ReturnMissingMessage = 2     // Return "MISSING: {original text}"
     }
 
     [CreateAssetMenu(fileName = "TranslationData", menuName = "Localization/TranslationData")]

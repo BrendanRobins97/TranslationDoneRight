@@ -247,7 +247,7 @@ namespace Translations
             {
                 MissingTextBehavior.ReturnNativeLanguage => "Returns the original text in the native language",
                 MissingTextBehavior.ReturnBlank => "Returns an empty string",
-                MissingTextBehavior.ReturnMissingMessage => "Returns 'TRANSLATION MISSING'",
+                MissingTextBehavior.ReturnMissingMessage => "Returns 'MISSING: {original text}'",
                 _ => ""
             };
             

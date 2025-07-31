@@ -186,15 +186,20 @@ namespace Translations
                     return string.Empty;
                     
                 case MissingTextBehavior.ReturnMissingMessage:
-                    return "TRANSLATION MISSING";
+                    // Return the canonical text but with disambiguation removed for the display
+                    int disambiguationIndex = canonicalText.IndexOf('|');
+                    string displayText = disambiguationIndex > 0 && disambiguationIndex < canonicalText.Length - 1
+                        ? canonicalText.Substring(0, disambiguationIndex)
+                        : canonicalText;
+                    return $"MISSING: {displayText}";
                     
                 case MissingTextBehavior.ReturnNativeLanguage:
                 default:
                     // Return the canonical text but with disambiguation removed
-                    int disambiguationIndex = canonicalText.IndexOf('|');
-                    if (disambiguationIndex > 0 && disambiguationIndex < canonicalText.Length - 1)
+                    int nativeDisambiguationIndex = canonicalText.IndexOf('|');
+                    if (nativeDisambiguationIndex > 0 && nativeDisambiguationIndex < canonicalText.Length - 1)
                     {
-                        return canonicalText.Substring(0, disambiguationIndex);
+                        return canonicalText.Substring(0, nativeDisambiguationIndex);
                     }
                     // No disambiguation, return as is
                     return canonicalText;
